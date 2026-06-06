@@ -1,8 +1,9 @@
 ## Backend
-- [ ] LLM integration
+- [x] LLM integration
 	- Gemma-4?
-	- [ ] Coming up with the lyrics
+	- [x] Coming up with the lyrics
 	- [ ] (?) Finding the best slice from the transcript
+- [ ] Suno integration
 - [ ] Stemming
 - [ ] Transcribing
 - [ ] Silence scanning
