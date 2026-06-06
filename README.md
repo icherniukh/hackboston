@@ -1,15 +1,17 @@
 ## Backend
+
+### Milestone 1 – Song generation
 - [x] LLM integration
-	- Gemma-4?
+	- Model: Gemma-4
 	- [x] Coming up with the lyrics
 	- [ ] (?) Finding the best slice from the transcript
-- [ ] Suno integration
-- [ ] Stemming
-- [ ] Transcribing
-- [ ] Silence scanning
+- [x] Suno integration
+- [x] Stemming
+- [x] Transcribing
+- [x] Silence scanning
 
 ```mermaid
-graph TD
+flowchart LR
     A[Generate lyrics] --> B[Generate Suno song]
     B --> C1[Extract voice stem]
     B --> C2[Transcribe song]
