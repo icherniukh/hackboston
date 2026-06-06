@@ -1,0 +1,6 @@
+.DS_Store
+.activate.sh
+.deactivate.sh
+separated/
+venv/
+whisper/
