@@ -17,13 +17,13 @@ import argparse
 import os
 import sys
 import time
-import uuid
 from dataclasses import dataclass, field
 from typing import Optional
 
 import requests
 
 from backend.integrations.ffmpeg import trim
+from backend.secrets import SUNO_API_KEY
 
 BASE_URL = "https://api.suno.com"
 
@@ -56,21 +56,15 @@ class Clip:
 class SunoClient:
     def __init__(
         self,
-        api_key: Optional[str] = None,
         base_url: str = BASE_URL,
         timeout: float = 30.0,
     ):
-        self.api_key = api_key or os.environ.get("SUNO_API_KEY")
-        if not self.api_key:
-            raise SunoError(
-                "No Suno API key. Pass api_key= or set the SUNO_API_KEY env var."
-            )
         self.base_url = base_url.rstrip("/")
         self.timeout = timeout
         self.session = requests.Session()
         self.session.headers.update(
             {
-                "Authorization": f"Bearer {self.api_key}",
+                "Authorization": f"Bearer {SUNO_API_KEY}",
                 "Content-Type": "application/json",
             }
         )
@@ -218,7 +212,6 @@ def generate_clip(
     instrumental: bool = False,
     length: Optional[float] = None,
     out_dir: str = ".",
-    api_key: Optional[str] = None,
     poll_interval: float = 3.0,
     poll_timeout: float = 300.0,
     on_status=None,
@@ -229,7 +222,7 @@ def generate_clip(
     returned object's ``path`` attribute (set below). If ``length`` is given, the
     downloaded clip is trimmed to that many seconds with ffmpeg.
     """
-    client = SunoClient(api_key=api_key)
+    client = SunoClient()
     clip_id = client.submit(
         lyrics=lyrics,
         style=style,

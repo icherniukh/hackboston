@@ -23,22 +23,13 @@ def detect_lyrics_bounds(*, input_path: str, noise_threshold_db: int) -> tuple[s
     )
 
 
-def trim(src: str, dest: str, seconds: float) -> str:
+def trim(src: str, dest: str, seconds: float, start: float | None = None) -> str:
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg not found on PATH; cannot trim. Install it or drop --length.")
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        src,
-        "-t",
-        str(seconds),
-        "-c:a",
-        "libmp3lame",
-        "-q:a",
-        "2",
-        dest,
-    ]
+    cmd = ["ffmpeg", "-y"]
+    if start is not None:
+        cmd += ["-ss", str(start)]
+    cmd += ["-i", src, "-t", str(seconds), "-c:a", "libmp3lame", "-q:a", "2", dest]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg trim failed: {proc.stderr.strip()}")
