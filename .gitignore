@@ -2,6 +2,7 @@
 .activate.sh
 .deactivate.sh
 .idea/
+backend/secrets.py
 input-songs/
 separated/
 venv/

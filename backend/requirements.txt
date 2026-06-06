@@ -1,1 +1,5 @@
 flask>=2.0.0
+demucs
+openai-whisper
+openrouter>=0.9.0
+torchcodec
