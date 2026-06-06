@@ -247,7 +247,7 @@ def generate_clip(
 
     if length:
         trimmed = f"{base}.trimmed.mp3"
-        trim(raw_path, trimmed, length)
+        trim(src=raw_path, dest=trimmed, duration_seconds=length)
         clip.path = trimmed  # type: ignore[attr-defined]
     else:
         clip.path = raw_path  # type: ignore[attr-defined]

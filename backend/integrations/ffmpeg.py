@@ -41,13 +41,23 @@ def get_duration(input_path: str) -> float:
     return float(proc.stdout.strip())
 
 
-def trim(src: str, dest: str, seconds: float, start: float | None = None) -> str:
+def trim(
+    *,
+    src: str,
+    dest: str,
+    duration_seconds: float,
+    start_seconds: float | None = None,
+    fade_seconds: float | None = None,
+) -> str:
     if not shutil.which("ffmpeg"):
         raise RuntimeError("ffmpeg not found on PATH; cannot trim. Install it or drop --length.")
     cmd = ["ffmpeg", "-y"]
-    if start is not None:
-        cmd += ["-ss", str(start)]
-    cmd += ["-i", src, "-t", str(seconds), "-c:a", "libmp3lame", "-q:a", "2", dest]
+    if start_seconds is not None:
+        cmd += ["-ss", str(start_seconds)]
+    cmd += ["-i", src, "-t", str(duration_seconds)]
+    if fade_seconds:
+        cmd += ["-af", f"afade=t=in:d={fade_seconds},afade=t=out:d={fade_seconds}:st={duration_seconds - fade_seconds}"]
+    cmd += ["-c:a", "libmp3lame", "-q:a", "2", dest]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg trim failed: {proc.stderr.strip()}")

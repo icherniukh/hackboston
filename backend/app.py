@@ -56,10 +56,10 @@ def generate_song_endpoint():
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
     end_sec = mmssms_to_float_seconds(last_start) if last_start else float("inf")
 
-    # Pad trim bounds by 1.5s, clamped to song duration
+    # Pad trim bounds, clamped to song duration
     song_duration = get_duration(song_path)
-    trim_start = max(0.0, start_sec - 1.5)
-    trim_end = min(song_duration, end_sec + 1.5)
+    trim_start = max(0.0, start_sec - 2)
+    trim_end = min(song_duration, end_sec + 2)
 
     filtered_transcript = [
         entry for entry in transcript
@@ -67,17 +67,16 @@ def generate_song_endpoint():
         and mmssms_to_float_seconds(list(entry.keys())[0][1]) <= trim_end
     ]
 
-    # Trim song to padded lyrics bounds
+    # Trim song to padded lyrics bounds, apply fade on both sides
     duration = trim_end - trim_start
     trimmed_path = os.path.join(song_dir, 'result.mp3')
-    trim(song_path, trimmed_path, duration, start=trim_start)
+    trim(src=song_path, dest=trimmed_path, duration_seconds=duration, start_seconds=trim_start, fade_seconds=1.0)
 
+    # Serve
     serializable_transcript = [
         {"start": list(entry.keys())[0][0], "end": list(entry.keys())[0][1], "text": list(entry.values())[0]}
         for entry in filtered_transcript
     ]
-
-    # Serve
     return jsonify({
         "input_message": input_message,
         "mood": mood,
