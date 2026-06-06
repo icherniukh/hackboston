@@ -1,7 +1,8 @@
 import os
+import uuid
+from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, jsonify, request, send_file, Response
-import uuid
 
 from backend.integrations.openrouter import generate_song_prompt
 from backend.integrations.suno import generate_clip
@@ -38,16 +39,18 @@ def generate_song_endpoint():
     )
     song_path = clip.path
 
-    # Extract voice stem (demucs)
-    vocals_path = separate_vocals(song_path, output_dir=song_dir)
+    # Extract voice stem and bounds + transcribe in parallel (both depend only on song_path)
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        vocals_future = pool.submit(separate_vocals, song_path, output_dir=song_dir)
+        transcript_future = pool.submit(transcribe, song_path)
 
-    # Transcribe song (whisper)
-    transcript = transcribe(song_path)
+        vocals_path = vocals_future.result()
+        bounds_future = pool.submit(
+            detect_lyrics_bounds, input_path=vocals_path, noise_threshold_db=-18
+        )
 
-    # Extract lyrics start & end timestamps from vocals
-    first_end, last_start = detect_lyrics_bounds(
-        input_path=vocals_path, noise_threshold_db=-18
-    )
+    transcript = transcript_future.result()
+    first_end, last_start = bounds_future.result()
 
     # Apply correct timestamps to transcription
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
