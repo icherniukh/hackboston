@@ -1,6 +1,7 @@
 .DS_Store
 .activate.sh
 .deactivate.sh
+.idea/
 input-songs/
 separated/
 venv/
