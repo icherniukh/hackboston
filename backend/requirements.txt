@@ -3,3 +3,4 @@ demucs
 openai-whisper
 openrouter>=0.9.0
 torchcodec
+requests>=2.25.0

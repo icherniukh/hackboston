@@ -5,6 +5,7 @@
 .idea/
 backend/secrets.py
 input-songs/
+*.mp3
 separated/
 venv/
 whisper/
