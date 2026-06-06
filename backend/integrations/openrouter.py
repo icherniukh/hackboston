@@ -7,7 +7,7 @@ DEFAULT_MODEL = "google/gemma-4-31b-it:free"
 
 SYSTEM_PROMPT = """You are a creative songwriter and music prompt engineer. Given a user's input message and a desired mood, you produce TWO things:
 
-1. **lyrics**: Original song lyrics that reflect the user's input message and mood.
+1. **lyrics**: Exactly 4 lines of the original hook lyrics that reflect the user's input message and mood.
 2. **music_prompt**: A detailed text prompt suitable for feeding into an AI music generation model (e.g. Suno, Udio). Describe instrumentation, tempo, genre, vocal style, and atmosphere.
 
 Always respond with valid JSON in this exact format:
@@ -19,7 +19,7 @@ Always respond with valid JSON in this exact format:
 Do not include any text outside the JSON object."""
 
 
-def generate_song(input_message: str, mood: str, model: str | None = None) -> dict:
+def generate_song_prompt(*, input_message: str, mood: str, model: str | None = None) -> dict:
     model = model or DEFAULT_MODEL
 
     user_content = f"Input message: {input_message}\nMood: {mood}"
