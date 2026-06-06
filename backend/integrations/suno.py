@@ -15,8 +15,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import shutil
-import subprocess
 import sys
 import time
 import uuid
@@ -24,6 +22,8 @@ from dataclasses import dataclass, field
 from typing import Optional
 
 import requests
+
+from backend.integrations.ffmpeg import trim
 
 BASE_URL = "https://api.suno.com"
 
@@ -207,33 +207,6 @@ class SunoClient:
         return dest
 
 
-def _trim(src: str, dest: str, seconds: float) -> str:
-    """Trim ``src`` to the first ``seconds`` seconds into ``dest`` via ffmpeg."""
-    if not shutil.which("ffmpeg"):
-        raise SunoError(
-            "ffmpeg not found on PATH; cannot trim. Install it or drop --length."
-        )
-    # Re-encode rather than stream-copy: Suno serves Opus inside an
-    # .mp3-named container, so `-c copy` into mp3 is rejected.
-    cmd = [
-        "ffmpeg",
-        "-y",
-        "-i",
-        src,
-        "-t",
-        str(seconds),
-        "-c:a",
-        "libmp3lame",
-        "-q:a",
-        "2",
-        dest,
-    ]
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode != 0:
-        raise SunoError(f"ffmpeg trim failed: {proc.stderr.strip()}")
-    return dest
-
-
 def generate_clip(
     *,
     lyrics: Optional[str] = None,
@@ -281,7 +254,7 @@ def generate_clip(
 
     if length:
         trimmed = f"{base}.trimmed.mp3"
-        _trim(raw_path, trimmed, length)
+        trim(raw_path, trimmed, length)
         clip.path = trimmed  # type: ignore[attr-defined]
     else:
         clip.path = raw_path  # type: ignore[attr-defined]
