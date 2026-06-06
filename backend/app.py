@@ -20,15 +20,18 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 @app.route("/generate-song", methods=["POST"])
 def generate_song_endpoint():
     data = request.get_json(force=True)
-    input_message = data.get("input_message", "")
-    mood = data.get("mood", "neutral")
+    input_message = data.get("input_message")
+    if not input_message:
+        return jsonify({"error": "No input message provided"}), 400
+    mood = data.get("mood")
+    genre = data.get("genre")
 
     song_id = str(uuid.uuid4())
     song_dir = os.path.join(OUTPUT_DIR, song_id)
     os.makedirs(song_dir, exist_ok=True)
 
     # Generate lyrics + style_prompt
-    prompt_result = generate_song_prompt(input_message=input_message, mood=mood)
+    prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre)
 
     # Generate Suno song
     clip = generate_clip(
