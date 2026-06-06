@@ -1,11 +1,12 @@
 **/__pycache__/
+*.mp3
 .DS_Store
 .activate.sh
 .deactivate.sh
 .idea/
+backend/output/
 backend/secrets.py
 input-songs/
-*.mp3
 separated/
 venv/
 whisper/

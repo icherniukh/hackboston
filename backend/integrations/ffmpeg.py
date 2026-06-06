@@ -17,10 +17,28 @@ def detect_lyrics_bounds(*, input_path: str, noise_threshold_db: int) -> tuple[s
     silence_ends = [float(m) for m in re.findall(r"silence_end:\s*([\d.]+)", stderr)]
     silence_starts = [float(m) for m in re.findall(r"silence_start:\s*([\d.]+)", stderr)]
 
+    if len(silence_starts) == 0 or silence_starts[0] != 0.0:
+        silence_starts.insert(0, 0.0)
+        silence_ends.insert(0, 0.0)
+
+    full_duration = get_duration(input_path)
+    if silence_ends[-1] != full_duration:
+        silence_starts.append(full_duration)
+        silence_ends.append(full_duration)
+
     return (
         float_seconds_to_mmssms(silence_ends[0]) if silence_ends else None,
         float_seconds_to_mmssms(silence_starts[-1]) if silence_starts else None,
     )
+
+
+def get_duration(input_path: str) -> float:
+    proc = subprocess.run(
+        ["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "default=noprint_wrappers=1:nokey=1", input_path],
+        capture_output=True,
+        text=True,
+    )
+    return float(proc.stdout.strip())
 
 
 def trim(src: str, dest: str, seconds: float, start: float | None = None) -> str:

@@ -7,7 +7,7 @@ from backend.integrations.openrouter import generate_song_prompt
 from backend.integrations.suno import generate_clip
 from backend.integrations.demucs import separate_vocals
 from backend.integrations.whisper import transcribe
-from backend.integrations.ffmpeg import detect_lyrics_bounds, trim
+from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim
 from backend.utils import mmssms_to_float_seconds
 
 app = Flask(__name__)
@@ -39,7 +39,7 @@ def generate_song_endpoint():
     song_path = clip.path
 
     # Extract voice stem (demucs)
-    vocals_path = separate_vocals(song_path)
+    vocals_path = separate_vocals(song_path, output_dir=song_dir)
 
     # Transcribe song (whisper)
     transcript = transcribe(song_path)
@@ -52,16 +52,27 @@ def generate_song_endpoint():
     # Apply correct timestamps to transcription
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
     end_sec = mmssms_to_float_seconds(last_start) if last_start else float("inf")
+
+    # Pad trim bounds by 1.5s, clamped to song duration
+    song_duration = get_duration(song_path)
+    trim_start = max(0.0, start_sec - 1.5)
+    trim_end = min(song_duration, end_sec + 1.5)
+
     filtered_transcript = [
         entry for entry in transcript
-        if mmssms_to_float_seconds(list(entry.keys())[0][0]) >= start_sec
-        and mmssms_to_float_seconds(list(entry.keys())[0][1]) <= end_sec
+        if mmssms_to_float_seconds(list(entry.keys())[0][0]) >= trim_start
+        and mmssms_to_float_seconds(list(entry.keys())[0][1]) <= trim_end
     ]
 
-    # Trim song to lyrics bounds
-    duration = end_sec - start_sec
+    # Trim song to padded lyrics bounds
+    duration = trim_end - trim_start
     trimmed_path = os.path.join(song_dir, 'result.mp3')
-    trim(song_path, trimmed_path, duration, start=start_sec)
+    trim(song_path, trimmed_path, duration, start=trim_start)
+
+    serializable_transcript = [
+        {"start": list(entry.keys())[0][0], "end": list(entry.keys())[0][1], "text": list(entry.values())[0]}
+        for entry in filtered_transcript
+    ]
 
     # Serve
     return jsonify({
@@ -69,7 +80,7 @@ def generate_song_endpoint():
         "mood": mood,
         "lyrics": prompt_result["lyrics"],
         "style_prompt": prompt_result["style_prompt"],
-        "transcript": filtered_transcript,
+        "transcript": serializable_transcript,
         "result_url": f"/songs/{song_id}.mp3",
     })
 
