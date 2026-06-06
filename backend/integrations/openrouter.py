@@ -22,7 +22,11 @@ Do not include any text outside the JSON object."""
 def generate_song_prompt(*, input_message: str, mood: str | None, genre: str | None, model: str | None = None) -> dict:
     model = model or DEFAULT_MODEL
 
-    user_content = f"Input message: {input_message}\nMood: {mood}\nGenre: {genre}"
+    user_content = "\n".join([
+        f"Input message: {input_message}",
+        *([f"Mood: {mood}"] if mood else []),
+        *([f"Genre: {genre}"] if genre else []),
+    ])
 
     with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
         res = client.chat.send(
