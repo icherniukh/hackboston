@@ -12,17 +12,23 @@
 - [x] Silence scanning
 
 ```mermaid
-flowchart LR
-    A[Generate lyrics] --> B[Generate Suno song]
-    B --> C1[Extract voice stem]
-    B --> C2[Transcribe song]
-    C1 --> D1[Extract lyrics start & end timestamps]
-    D1 & C2 --> E[Apply correct timestamps to transcription]
-    E --> F["Optional: Run the final transcript by an LLM to determine the best matching slice for original input"]
-    F --> G[Trim song]
-    G --> H[Serve]
+flowchart TD
+    A0["<b>POST /generate-song</b><br>Receive input message and optional desired mood & genre"]
+    A["gemma-4-31b-it (via OpenRouter)<br><b>generate lyrics and style prompt</b>"] --> B1
+    A0 --> A
+    A --> B2
 
-	style F stroke-dasharray: 5 5
+    subgraph parallel["Thread pool (2 workers)"]
+        B1["<b>Suno /v0/audio API<br>generate song</b>"]
+        B2["gemini-3.1-flash-image-preview<br>(via OpenRouter) produce album art"]
+    end
+
+    B1 --> C0["ffmpeg: MP3 → WAV for demucs input"]
+    C0 --> C["demucs-mlx: separate the vocals stem"]
+    C --> D["ffmpeg: detect vocals bounds via silencedetect filter"]
+    B2 --> F["Pillow: PNG → JPG<br>(for filesize savings)"]
+    D & F --> G["ffmpeg trim, fade & attach cover"]
+    G --> H["Serve as <b>GET /songs/&lt;id&gt;.m4a</b>"]
 ```
 
 ### Milestone 2 – Backend response
