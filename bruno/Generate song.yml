@@ -1,0 +1,22 @@
+info:
+  name: Generate song
+  type: http
+  seq: 2
+
+http:
+  method: POST
+  url: "{{host_url}}/generate-song"
+  body:
+    type: json
+    data: |
+      {
+        "input_message": "museum tonight? they got the new dali exhibition there",
+        "genre": "edm"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

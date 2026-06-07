@@ -1,0 +1,21 @@
+info:
+  name: Expect reply
+  type: http
+  seq: 3
+
+http:
+  method: POST
+  url: "{{host_url}}/expect-reply"
+  body:
+    type: json
+    data: |
+      {
+        "reference_id": "9d4878a4-f302-445c-9741-9a510f4f397a"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

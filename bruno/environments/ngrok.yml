@@ -1,0 +1,5 @@
+name: ngrok
+color: "#2E8A54"
+variables:
+  - name: host_url
+    value: https://nugget-freeing-grip.ngrok-free.dev

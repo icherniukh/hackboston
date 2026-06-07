@@ -1,0 +1,5 @@
+name: localhost
+color: "#C77A0F"
+variables:
+  - name: host_url
+    value: 127.0.0.1:5555
