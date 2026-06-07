@@ -1,6 +1,8 @@
 import json
+import logging
 import os
 import threading
+import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 
@@ -13,7 +15,11 @@ from backend.integrations.demucs import separate_vocals
 from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim, attach_cover
 from backend.utils import mmssms_to_float_seconds
 
+logger = logging.getLogger(__name__)
+
 app = Flask(__name__)
+
+logging.basicConfig(level=logging.INFO)
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -22,9 +28,12 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 reply_jobs: dict[str, dict] = {}
 
 
-def _postprocess_song(song_path: str, song_dir: str) -> None:
+def _postprocess_song(song_path: str, song_dir: str, t0: float) -> None:
     vocals_path = separate_vocals(song_path, output_dir=song_dir)
+    logger.info("[%+.1fs] demucs done", time.monotonic() - t0)
+
     first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-7)
+    logger.info("[%+.1fs] lyrics bounds detected", time.monotonic() - t0)
 
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
     end_sec = mmssms_to_float_seconds(last_start) if last_start else float("inf")
@@ -42,6 +51,7 @@ def _postprocess_song(song_path: str, song_dir: str) -> None:
         start_seconds=trim_start,
         fade_seconds=1.0,
     )
+    logger.info("[%+.1fs] trim done", time.monotonic() - t0)
 
 
 def _produce_song(
@@ -51,6 +61,7 @@ def _produce_song(
     song_id: str | None = None,
     mood: str | None = None,
     genre: str | None = None,
+    t0: float = 0.0,
 ) -> dict:
     """Generate a Suno clip, post-process, generate album art, and persist the response.
 
@@ -70,16 +81,21 @@ def _produce_song(
         input_message=input_message,
         out_dir=song_dir,
     )
+    logger.info("[%+.1fs] clip+art submitted", time.monotonic() - t0)
 
     clip = song_future.result()
-    _postprocess_song(clip.path, song_dir)
+    logger.info("[%+.1fs] clip ready", time.monotonic() - t0)
+
+    _postprocess_song(clip.path, song_dir, t0)
 
     cover_path = art_future.result()
     pool.shutdown(wait=False)
+    logger.info("[%+.1fs] art ready", time.monotonic() - t0)
 
     # Convert PNG cover to JPG for m4a embedding
     cover_jpg = os.path.join(song_dir, "cover.jpg")
     Image.open(cover_path).convert("RGB").save(cover_jpg, "JPEG")
+    logger.info("[%+.1fs] cover converted to JPG", time.monotonic() - t0)
 
     # Combine audio + cover into m4a
     m4a_path = os.path.join(song_dir, "result.m4a")
@@ -88,6 +104,7 @@ def _produce_song(
         cover_path=cover_jpg,
         dest=m4a_path,
     )
+    logger.info("[%+.1fs] m4a assembled", time.monotonic() - t0)
 
     response = {
         "id": song_id,
@@ -106,6 +123,7 @@ def _produce_song(
 
 @app.route("/generate-song", methods=["POST"])
 def generate_song_endpoint():
+    t0 = time.monotonic()
     data = request.get_json(force=True)
     input_message = data.get("input_message")
     if not input_message:
@@ -142,6 +160,7 @@ def generate_song_endpoint():
 
     # Original OpenRouter (lyrics + style_prompt)
     prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre)
+    logger.info("[%+.1fs] song prompt generated", time.monotonic() - t0)
 
     # Kick off reply pipeline — its OpenRouter calls run while original Suno generates
     # threading.Thread(target=run_reply_pipeline, daemon=True).start()
@@ -153,9 +172,11 @@ def generate_song_endpoint():
         song_id=song_id,
         mood=mood,
         genre=genre,
+        t0=t0,
     )
     original_suno_done.set()
 
+    logger.info("[%+.1fs] endpoint complete", time.monotonic() - t0)
     return jsonify(response)
 
 

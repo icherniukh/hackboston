@@ -6,6 +6,7 @@
 .idea/
 backend/output/
 backend/secrets.py
+backend/server.log
 input-songs/
 separated/
 venv/
