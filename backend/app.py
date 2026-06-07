@@ -24,7 +24,7 @@ reply_jobs: dict[str, dict] = {}
 
 def _postprocess_song(song_path: str, song_dir: str) -> None:
     vocals_path = separate_vocals(song_path, output_dir=song_dir)
-    first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-18)
+    first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-7)
 
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
     end_sec = mmssms_to_float_seconds(last_start) if last_start else float("inf")

@@ -32,7 +32,7 @@ Always respond with valid JSON in this exact format:
 
 Do not include any text outside the JSON object."""
 
-ALBUM_ART_SYSTEM_PROMPT = """You are an album art designer. Given a description of a song's theme and mood, generate a striking, evocative image suitable for album cover art. The image should visually capture the emotional essence of the song — its atmosphere, colors, and energy, while being intelligible when seen on a thumbnail. Do not include any text or words in the image."""
+ALBUM_ART_SYSTEM_PROMPT = """You are an album art designer. Given a description of a song's theme and mood, generate a striking, evocative image suitable for album cover art. The image should visually capture the emotional essence of the song — its atmosphere, colors, and energy, while being intelligible when seen on a thumbnail. The output image dimensions must be an exact 1:1 square. Do not include any text or words in the image."""
 
 REPLY_CONTEXT_SYSTEM_PROMPT = """Given a snippet of song lyrics that was sent to you in place of a text message, generate a reply message pretending to be the intended recipient of the original. The reply should be emotionally or thematically connected — a counterpoint, echo, or answer to the original. Be playful but stay on theme.
 
