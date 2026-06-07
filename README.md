@@ -28,6 +28,19 @@ flowchart LR
 ### Milestone 2 – Backend response
 - [ ] `expect-response` client poll API taking the reference uuid
 
+```mermaid
+sequenceDiagram
+    participant Client
+    participant Server
+
+    Client->>+Server: /generate-song
+    Note right of Server: Processes song (~50 seconds), immediately<br>starts processing a new song in response to it<br>step by step as soon as it can be done
+    Server->>Client: Sends generated song
+    Client->>Server: /expect-response
+    Note right of Server: Finishes processing response
+    Server->>-Client: Sends response
+```
+
 ### Presentation
 - [ ] Showcase a11y
 - [ ] Mention postcards
