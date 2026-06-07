@@ -7,37 +7,6 @@ from backend.secrets import OPENROUTER_API_KEY
 
 DEFAULT_MODEL = "google/gemma-4-31b-it"
 
-GENRES = [
-    "hip-hop",
-    "rock",
-    "pop",
-    "r&b",
-    "edm",
-    "jazz",
-    "indie",
-    "country",
-    "metal",
-]
-
-REPLY_CONTEXT_SYSTEM_PROMPT = """Given a snippet of song lyrics that was sent to you in place of a text message, generate a reply message pretending to be the intended recipient of the original. The reply should be emotionally or thematically connected — a counterpoint, echo, or answer to the original. Be playful but stay on theme.
-
-Always respond with valid JSON in this exact format:
-{
-  "reply_message": "<your reply message here>"
-}
-
-Do not include any text outside the JSON object."""
-
-
-def _parse_json_response(raw: str) -> dict:
-    try:
-        return json.loads(raw)
-    except json.JSONDecodeError:
-        cleaned = raw.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
-        return json.loads(cleaned)
-
 SYSTEM_PROMPT = """You are a creative songwriter and music prompt engineer. Given a user's input message and a desired mood, you produce TWO things:
 
 1. **lyrics**: Exactly 4 lines of the original hook lyrics that reflect the user's input message, and optionally mood and/or desired genre. If either mood or genre is not specified, derive it from the other two. If neither is specified, derive both from the input message.
@@ -50,6 +19,37 @@ Always respond with valid JSON in this exact format:
 }
 
 Do not include any text outside the JSON object."""
+
+REPLY_CONTEXT_SYSTEM_PROMPT = """Given a snippet of song lyrics that was sent to you in place of a text message, generate a reply message pretending to be the intended recipient of the original. The reply should be emotionally or thematically connected — a counterpoint, echo, or answer to the original. Be playful but stay on theme.
+
+Always respond with valid JSON in this exact format:
+{
+  "reply_message": "<your reply message here>"
+}
+
+Do not include any text outside the JSON object."""
+
+GENRES = [
+    # "hip-hop",
+    "rock",
+    # "pop",
+    # "r&b",
+    "edm",
+    "jazz",
+    "indie",
+    "country",
+    "metal",
+]
+
+
+def _parse_json_response(raw: str) -> dict:
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        cleaned = raw.strip()
+        if cleaned.startswith("```"):
+            cleaned = cleaned.split("\n", 1)[-1].rsplit("```", 1)[0].strip()
+        return json.loads(cleaned)
 
 
 def generate_song_prompt(
@@ -85,17 +85,10 @@ def generate_song_prompt(
     }
 
 
-def generate_reply_context(
-    original_input_message: str,
-    original_prompt: dict,
-    model: str | None = None,
-) -> dict:
+def generate_reply_context(*, original_lyrics: str, model: str | None = None) -> dict:
     model = model or DEFAULT_MODEL
 
-    user_content = "\n".join([
-        # f"Original message: {original_input_message}",
-        f"Original lyrics:\n{original_prompt['lyrics']}",
-    ])
+    user_content = f"Original lyrics:\n{original_lyrics}"
 
     with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
         res = client.chat.send(
@@ -111,6 +104,5 @@ def generate_reply_context(
 
     return {
         "input_message": parsed.get("reply_message", ""),
-        # "mood": original_prompt['mood'],
         "genre": random.choice(GENRES),
     }

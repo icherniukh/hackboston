@@ -2,14 +2,12 @@ import json
 import os
 import threading
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 
 from flask import Flask, jsonify, request, send_file, Response
 
 from backend.integrations.openrouter import generate_song_prompt, generate_reply_context
 from backend.integrations.suno import generate_clip
 from backend.integrations.demucs import separate_vocals
-from backend.integrations.whisper import transcribe
 from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim
 from backend.utils import mmssms_to_float_seconds
 
@@ -23,9 +21,6 @@ reply_jobs: dict[str, dict] = {}
 
 
 def _postprocess_song(song_path: str, song_dir: str) -> None:
-    """Run demucs, bounds detection, trim, and fade on a generated clip.
-    Returns {"transcript": [...], "trim_start": float, "trim_end": float, "duration": float}.
-    """
     vocals_path = separate_vocals(song_path, output_dir=song_dir)
     first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-18)
 
@@ -47,88 +42,29 @@ def _postprocess_song(song_path: str, song_dir: str) -> None:
     )
 
 
-@app.route("/generate-song", methods=["POST"])
-def generate_song_endpoint():
-    data = request.get_json(force=True)
-    input_message = data.get("input_message")
-    if not input_message:
-        return jsonify({"error": "No input message provided"}), 400
-    mood = data.get("mood")
-    genre = data.get("genre")
+def _produce_song(
+    *,
+    prompt_result: dict,
+    input_message: str,
+    song_id: str | None = None,
+    mood: str | None = None,
+    genre: str | None = None,
+) -> dict:
+    """Generate a Suno clip, post-process, and persist the response.
 
-    song_id = str(uuid.uuid4())
+    Returns (song_id, response_dict).
+    """
+    song_id = song_id or str(uuid.uuid4())
     song_dir = os.path.join(OUTPUT_DIR, song_id)
     os.makedirs(song_dir, exist_ok=True)
 
-    # Set up reply job tracking
-    reply_event = threading.Event()
-    reply_jobs[song_id] = {"event": reply_event, "result": None}
-    original_suno_done = threading.Event()
-
-    def run_reply_pipeline():
-        try:
-            # R1: Generate reply context (input_message, mood, genre) via OpenRouter
-            reply_context = generate_reply_context(input_message, prompt_result)
-
-            # R2: Generate reply song prompt (lyrics, style_prompt) via OpenRouter
-            reply_prompt = generate_song_prompt(
-                input_message=reply_context["input_message"],
-                # mood=reply_context["mood"],
-                genre=reply_context["genre"],
-            )
-
-            # R3: Wait for original Suno to finish, then start reply Suno
-            original_suno_done.wait()
-
-            reply_song_id = str(uuid.uuid4())
-            reply_song_dir = os.path.join(OUTPUT_DIR, reply_song_id)
-            os.makedirs(reply_song_dir, exist_ok=True)
-
-            reply_clip = generate_clip(
-                lyrics=reply_prompt["lyrics"],
-                style=reply_prompt["style_prompt"],
-                out_dir=reply_song_dir,
-            )
-
-            # R4: Full post-processing (runs while original demucs/whisper may still be going)
-            _postprocess_song(reply_clip.path, reply_song_dir)
-
-            reply_response = {
-                "reference_id": song_id,
-                "input_message": reply_context["input_message"],
-                "mood": reply_context.get("mood"),
-                "genre": reply_context.get("genre"),
-                "lyrics": reply_prompt["lyrics"],
-                "style_prompt": reply_prompt["style_prompt"],
-                "result_url": f"/songs/{reply_song_id}.mp3",
-            }
-            with open(os.path.join(reply_song_dir, "response.json"), "w") as f:
-                json.dump(reply_response, f, indent=2)
-
-            reply_jobs[song_id]["result"] = reply_response
-        except Exception as e:
-            reply_jobs[song_id]["result"] = {"error": str(e)}
-        finally:
-            reply_event.set()
-
-    # Step 1: Original OpenRouter (lyrics + style_prompt)
-    prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre)
-
-    # Kick off reply pipeline in background — OpenRouter calls run while original Suno generates
-    reply_thread = threading.Thread(target=run_reply_pipeline, daemon=True)
-    reply_thread.start()
-
-    # Step 2: Original Suno (blocking)
     clip = generate_clip(
         lyrics=prompt_result["lyrics"],
         style=prompt_result["style_prompt"],
         out_dir=song_dir,
     )
-    song_path = clip.path
-    original_suno_done.set()  # Reply pipeline can now start its Suno call
 
-    # Step 3: Original post-processing
-    _postprocess_song(song_path, song_dir)
+    _postprocess_song(clip.path, song_dir)
 
     response = {
         "id": song_id,
@@ -141,6 +77,62 @@ def generate_song_endpoint():
     }
     with open(os.path.join(song_dir, "response.json"), "w") as f:
         json.dump(response, f, indent=2)
+
+    return response
+
+
+@app.route("/generate-song", methods=["POST"])
+def generate_song_endpoint():
+    data = request.get_json(force=True)
+    input_message = data.get("input_message")
+    if not input_message:
+        return jsonify({"error": "No input message provided"}), 400
+    mood = data.get("mood")
+    genre = data.get("genre")
+
+    song_id = str(uuid.uuid4())
+
+    # Set up reply job tracking before starting anything
+    reply_event = threading.Event()
+    reply_jobs[song_id] = {"event": reply_event, "result": None}
+    original_suno_done = threading.Event()
+
+    def run_reply_pipeline():
+        try:
+            reply_context = generate_reply_context(original_lyrics=prompt_result["lyrics"])
+            reply_prompt = generate_song_prompt(
+                input_message=reply_context["input_message"],
+                genre=reply_context["genre"],
+            )
+            original_suno_done.wait()
+
+            reply_jobs[song_id]["result"] = _produce_song(
+                prompt_result=reply_prompt,
+                input_message=reply_context["input_message"],
+                mood=reply_context.get("mood"),
+                genre=reply_context.get("genre"),
+            )
+        except Exception as e:
+            reply_jobs[song_id]["result"] = {"error": str(e)}
+        finally:
+            reply_event.set()
+
+    # Original OpenRouter (lyrics + style_prompt)
+    prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre)
+
+    # Kick off reply pipeline — its OpenRouter calls run while original Suno generates
+    threading.Thread(target=run_reply_pipeline, daemon=True).start()
+
+    # Original Suno + postprocess
+    response = _produce_song(
+        prompt_result=prompt_result,
+        input_message=input_message,
+        song_id=song_id,
+        mood=mood,
+        genre=genre,
+    )
+    original_suno_done.set()
+
     return jsonify(response)
 
 
