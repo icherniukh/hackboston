@@ -121,7 +121,7 @@ def generate_song_endpoint():
     prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre)
 
     # Kick off reply pipeline — its OpenRouter calls run while original Suno generates
-    threading.Thread(target=run_reply_pipeline, daemon=True).start()
+    # threading.Thread(target=run_reply_pipeline, daemon=True).start()
 
     # Original Suno + postprocess
     response = _produce_song(
