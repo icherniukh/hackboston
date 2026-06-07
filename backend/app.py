@@ -1,3 +1,4 @@
+import json
 import os
 import uuid
 from concurrent.futures import ThreadPoolExecutor
@@ -80,14 +81,18 @@ def generate_song_endpoint():
         {"start": list(entry.keys())[0][0], "end": list(entry.keys())[0][1], "text": list(entry.values())[0]}
         for entry in filtered_transcript
     ]
-    return jsonify({
+    response = {
         "input_message": input_message,
         "mood": mood,
+        "genre": genre,
         "lyrics": prompt_result["lyrics"],
         "style_prompt": prompt_result["style_prompt"],
         "transcript": serializable_transcript,
         "result_url": f"/songs/{song_id}.mp3",
-    })
+    }
+    with open(os.path.join(song_dir, "response.json"), "w") as f:
+        json.dump(response, f, indent=2)
+    return jsonify(response)
 
 
 @app.route("/songs/<song_id>.mp3")
