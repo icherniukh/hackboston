@@ -62,3 +62,20 @@ def trim(
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg trim failed: {proc.stderr.strip()}")
     return dest
+
+
+def attach_cover(*, audio_path: str, cover_path: str, dest: str) -> str:
+    cmd = [
+        "ffmpeg", "-y",
+        "-i", audio_path,
+        "-i", cover_path,
+        "-map", "0:a", "-map", "1:v",
+        "-c:a", "aac", "-b:a", "256k",
+        "-c:v", "mjpeg",
+        "-disposition:v", "attached_pic",
+        dest,
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True)
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg attach_cover failed: {proc.stderr.strip()}")
+    return dest

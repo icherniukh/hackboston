@@ -2,13 +2,15 @@ import json
 import os
 import threading
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 
+from PIL import Image
 from flask import Flask, jsonify, request, send_file, Response
 
-from backend.integrations.openrouter import generate_song_prompt, generate_reply_context
+from backend.integrations.openrouter import generate_song_prompt, generate_reply_context, generate_album_art
 from backend.integrations.suno import generate_clip
 from backend.integrations.demucs import separate_vocals
-from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim
+from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim, attach_cover
 from backend.utils import mmssms_to_float_seconds
 
 app = Flask(__name__)
@@ -32,7 +34,7 @@ def _postprocess_song(song_path: str, song_dir: str) -> None:
     trim_end = min(song_duration, end_sec + 2)
 
     duration = trim_end - trim_start
-    trimmed_path = os.path.join(song_dir, "result.mp3")
+    trimmed_path = os.path.join(song_dir, "trimmed.mp3")
     trim(
         src=song_path,
         dest=trimmed_path,
@@ -50,21 +52,40 @@ def _produce_song(
     mood: str | None = None,
     genre: str | None = None,
 ) -> dict:
-    """Generate a Suno clip, post-process, and persist the response.
+    """Generate a Suno clip, post-process, generate album art, and persist the response.
 
-    Returns (song_id, response_dict).
+    Returns response_dict.
     """
     song_id = song_id or str(uuid.uuid4())
     song_dir = os.path.join(OUTPUT_DIR, song_id)
     os.makedirs(song_dir, exist_ok=True)
 
-    clip = generate_clip(
-        lyrics=prompt_result["lyrics"],
-        style=prompt_result["style_prompt"],
-        out_dir=song_dir,
-    )
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        song_future = pool.submit(generate_clip,
+            lyrics=prompt_result["lyrics"],
+            style=prompt_result["style_prompt"],
+            out_dir=song_dir,
+        )
+        art_future = pool.submit(generate_album_art,
+            input_message=input_message,
+            out_dir=song_dir,
+        )
 
-    _postprocess_song(clip.path, song_dir)
+        clip = song_future.result()
+        _postprocess_song(clip.path, song_dir)
+        cover_path = art_future.result()
+
+    # Convert PNG cover to JPG for m4a embedding
+    cover_jpg = os.path.join(song_dir, "cover.jpg")
+    Image.open(cover_path).convert("RGB").save(cover_jpg, "JPEG")
+
+    # Combine audio + cover into m4a
+    m4a_path = os.path.join(song_dir, "result.m4a")
+    attach_cover(
+        audio_path=os.path.join(song_dir, "trimmed.mp3"),
+        cover_path=cover_jpg,
+        dest=m4a_path,
+    )
 
     response = {
         "id": song_id,
@@ -73,7 +94,7 @@ def _produce_song(
         "genre": genre,
         "lyrics": prompt_result["lyrics"],
         "style_prompt": prompt_result["style_prompt"],
-        "result_url": f"/songs/{song_id}.mp3",
+        "result_url": f"/songs/{song_id}.m4a",
     }
     with open(os.path.join(song_dir, "response.json"), "w") as f:
         json.dump(response, f, indent=2)
@@ -155,12 +176,12 @@ def expect_reply_endpoint():
     return jsonify(result)
 
 
-@app.route("/songs/<song_id>.mp3")
+@app.route("/songs/<song_id>.m4a")
 def stream_song(song_id):
-    filepath = os.path.join(OUTPUT_DIR, song_id, "result.mp3")
+    filepath = os.path.join(OUTPUT_DIR, song_id, "result.m4a")
     if not os.path.exists(filepath):
         return Response(status=404)
-    return send_file(filepath, mimetype="audio/mpeg")
+    return send_file(filepath, mimetype="audio/mp4")
 
 
 @app.route("/health")
