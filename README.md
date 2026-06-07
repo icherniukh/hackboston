@@ -8,6 +8,7 @@
 - [x] Suno integration
 - [x] Stemming
 - [x] Transcribing
+  - [ ] Idea: try removing the transcription part and trimming to any vocals
 - [x] Silence scanning
 
 ```mermaid
@@ -23,3 +24,11 @@ flowchart LR
 
 	style F stroke-dasharray: 5 5
 ```
+
+### Milestone 2 – Backend response
+- [ ] `expect-response` client poll API taking the reference uuid
+
+### Presentation
+- [ ] Showcase a11y
+- [ ] Mention postcards
+- [ ] Mention iMessage
