@@ -1,5 +1,19 @@
 ## Backend
 
+### Operating instructions
+Prep (tested on Python 3.11):
+```shell
+python3 -m venv venv
+cd backend && pip install -r requirements.txt
+cd ../demucs-mlx && make install && cd ..
+```
+Run:
+```shell
+cd backend
+flask run --host=0.0.0.0 --port=5555 2>&1 | tee server.log
+ngrok http 5555  # For public endpoint access
+```
+
 ### Milestone 1 – Song generation
 - [x] LLM integration
 	- Model: Gemma-4
