@@ -60,20 +60,22 @@ def _produce_song(
     song_dir = os.path.join(OUTPUT_DIR, song_id)
     os.makedirs(song_dir, exist_ok=True)
 
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        song_future = pool.submit(generate_clip,
-            lyrics=prompt_result["lyrics"],
-            style=prompt_result["style_prompt"],
-            out_dir=song_dir,
-        )
-        art_future = pool.submit(generate_album_art,
-            input_message=input_message,
-            out_dir=song_dir,
-        )
+    pool = ThreadPoolExecutor(max_workers=2)
+    song_future = pool.submit(generate_clip,
+        lyrics=prompt_result["lyrics"],
+        style=prompt_result["style_prompt"],
+        out_dir=song_dir,
+    )
+    art_future = pool.submit(generate_album_art,
+        input_message=input_message,
+        out_dir=song_dir,
+    )
 
-        clip = song_future.result()
-        _postprocess_song(clip.path, song_dir)
-        cover_path = art_future.result()
+    clip = song_future.result()
+    _postprocess_song(clip.path, song_dir)
+
+    cover_path = art_future.result()
+    pool.shutdown(wait=False)
 
     # Convert PNG cover to JPG for m4a embedding
     cover_jpg = os.path.join(song_dir, "cover.jpg")
