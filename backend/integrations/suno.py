@@ -203,15 +203,13 @@ class SunoClient:
 
 def generate_clip(
     *,
+    out_dir: str,
     lyrics: Optional[str] = None,
     style: Optional[str] = None,
     description: Optional[str] = None,
-    mood: Optional[str] = None,
     title: Optional[str] = None,
     voice_id: Optional[str] = None,
     instrumental: bool = False,
-    length: Optional[float] = None,
-    out_dir: str = ".",
     poll_interval: float = 3.0,
     poll_timeout: float = 300.0,
     on_status=None,
@@ -227,7 +225,6 @@ def generate_clip(
         lyrics=lyrics,
         style=style,
         description=description,
-        mood=mood,
         title=title,
         voice_id=voice_id,
         instrumental=instrumental,
@@ -242,15 +239,7 @@ def generate_clip(
         raise SunoError("Clip completed but no audio_url was returned.")
 
     os.makedirs(out_dir, exist_ok=True)
-    base = os.path.join(out_dir, clip_id)
-    raw_path = client.download(clip.audio_url, f"{base}.mp3")
-
-    if length:
-        trimmed = f"{base}.trimmed.mp3"
-        trim(src=raw_path, dest=trimmed, duration_seconds=length)
-        clip.path = trimmed  # type: ignore[attr-defined]
-    else:
-        clip.path = raw_path  # type: ignore[attr-defined]
+    clip.path = client.download(clip.audio_url, f"{os.path.join(out_dir, 'suno')}.mp3")
 
     return clip
 
@@ -307,11 +296,9 @@ def main(argv: Optional[list] = None) -> int:
             lyrics=args.lyrics,
             style=args.style,
             description=args.description,
-            mood=args.mood,
             title=args.title,
             voice_id=args.voice_id,
             instrumental=args.instrumental,
-            length=args.length,
             out_dir=args.out_dir,
             poll_timeout=args.poll_timeout,
             on_status=on_status,

@@ -22,21 +22,12 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 reply_jobs: dict[str, dict] = {}
 
 
-def _postprocess_song(song_path: str, song_dir: str) -> dict:
-    """Run demucs, whisper, bounds detection, trim, and fade on a generated clip.
+def _postprocess_song(song_path: str, song_dir: str) -> None:
+    """Run demucs, bounds detection, trim, and fade on a generated clip.
     Returns {"transcript": [...], "trim_start": float, "trim_end": float, "duration": float}.
     """
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        vocals_future = pool.submit(separate_vocals, song_path, output_dir=song_dir)
-        transcript_future = pool.submit(transcribe, song_path)
-
-        vocals_path = vocals_future.result()
-        bounds_future = pool.submit(
-            detect_lyrics_bounds, input_path=vocals_path, noise_threshold_db=-18
-        )
-
-    transcript = transcript_future.result()
-    first_end, last_start = bounds_future.result()
+    vocals_path = separate_vocals(song_path, output_dir=song_dir)
+    first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-18)
 
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
     end_sec = mmssms_to_float_seconds(last_start) if last_start else float("inf")
@@ -44,12 +35,6 @@ def _postprocess_song(song_path: str, song_dir: str) -> dict:
     song_duration = get_duration(song_path)
     trim_start = max(0.0, start_sec - 2)
     trim_end = min(song_duration, end_sec + 2)
-
-    filtered_transcript = [
-        entry for entry in transcript
-        if mmssms_to_float_seconds(list(entry.keys())[0][0]) >= trim_start
-        and mmssms_to_float_seconds(list(entry.keys())[0][1]) <= trim_end
-    ]
 
     duration = trim_end - trim_start
     trimmed_path = os.path.join(song_dir, "result.mp3")
@@ -60,21 +45,6 @@ def _postprocess_song(song_path: str, song_dir: str) -> dict:
         start_seconds=trim_start,
         fade_seconds=1.0,
     )
-
-    serializable_transcript = [
-        {
-            "start": list(entry.keys())[0][0],
-            "end": list(entry.keys())[0][1],
-            "text": list(entry.values())[0],
-        }
-        for entry in filtered_transcript
-    ]
-    return {
-        "transcript": serializable_transcript,
-        "trim_start": trim_start,
-        "trim_end": trim_end,
-        "duration": duration,
-    }
 
 
 @app.route("/generate-song", methods=["POST"])
@@ -103,7 +73,7 @@ def generate_song_endpoint():
             # R2: Generate reply song prompt (lyrics, style_prompt) via OpenRouter
             reply_prompt = generate_song_prompt(
                 input_message=reply_context["input_message"],
-                mood=reply_context["mood"],
+                # mood=reply_context["mood"],
                 genre=reply_context["genre"],
             )
 
@@ -117,21 +87,19 @@ def generate_song_endpoint():
             reply_clip = generate_clip(
                 lyrics=reply_prompt["lyrics"],
                 style=reply_prompt["style_prompt"],
-                mood=reply_context["mood"],
                 out_dir=reply_song_dir,
             )
 
             # R4: Full post-processing (runs while original demucs/whisper may still be going)
-            pp = _postprocess_song(reply_clip.path, reply_song_dir)
+            _postprocess_song(reply_clip.path, reply_song_dir)
 
             reply_response = {
                 "reference_id": song_id,
                 "input_message": reply_context["input_message"],
-                "mood": reply_context["mood"],
-                "genre": reply_context["genre"],
+                "mood": reply_context.get("mood"),
+                "genre": reply_context.get("genre"),
                 "lyrics": reply_prompt["lyrics"],
                 "style_prompt": reply_prompt["style_prompt"],
-                "transcript": pp["transcript"],
                 "result_url": f"/songs/{reply_song_id}.mp3",
             }
             with open(os.path.join(reply_song_dir, "response.json"), "w") as f:
@@ -154,14 +122,13 @@ def generate_song_endpoint():
     clip = generate_clip(
         lyrics=prompt_result["lyrics"],
         style=prompt_result["style_prompt"],
-        mood=mood,
         out_dir=song_dir,
     )
     song_path = clip.path
     original_suno_done.set()  # Reply pipeline can now start its Suno call
 
     # Step 3: Original post-processing
-    pp = _postprocess_song(song_path, song_dir)
+    _postprocess_song(song_path, song_dir)
 
     response = {
         "id": song_id,
@@ -170,7 +137,6 @@ def generate_song_endpoint():
         "genre": genre,
         "lyrics": prompt_result["lyrics"],
         "style_prompt": prompt_result["style_prompt"],
-        "transcript": pp["transcript"],
         "result_url": f"/songs/{song_id}.mp3",
     }
     with open(os.path.join(song_dir, "response.json"), "w") as f:
@@ -181,13 +147,13 @@ def generate_song_endpoint():
 @app.route("/expect-reply", methods=["POST"])
 def expect_reply_endpoint():
     data = request.get_json(force=True)
-    reference_id = data.get("reference-id")
+    reference_id = data.get("reference_id")
     if not reference_id:
-        return jsonify({"error": "No reference-id provided"}), 400
+        return jsonify({"error": "No reference_id provided"}), 400
 
     job = reply_jobs.get(reference_id)
     if not job:
-        return jsonify({"error": "No reply job found for this reference-id"}), 404
+        return jsonify({"error": "No reply job found for this reference_id"}), 404
 
     # Block until the reply pipeline is done
     job["event"].wait()
@@ -211,4 +177,4 @@ def health():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=5555)

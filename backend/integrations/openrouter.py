@@ -5,18 +5,21 @@ from openrouter import OpenRouter
 
 from backend.secrets import OPENROUTER_API_KEY
 
-DEFAULT_MODEL = "google/gemma-4-31b-it:free"
+DEFAULT_MODEL = "google/gemma-4-31b-it"
 
-MOODS = [
-    "happy", "sad", "melancholic", "upbeat", "dreamy",
-    "aggressive", "chill", "nostalgic", "hopeful", "dark",
-]
 GENRES = [
-    "pop", "rock", "hip-hop", "r&b", "electronic", "folk",
-    "jazz", "indie", "ambient", "country", "soul", "punk",
+    "hip-hop",
+    "rock",
+    "pop",
+    "r&b",
+    "edm",
+    "jazz",
+    "indie",
+    "country",
+    "metal",
 ]
 
-REPLY_CONTEXT_SYSTEM_PROMPT = """You are a creative songwriter. Given an original message that inspired a song and its resulting lyrics, generate a reply message as if another person is responding to the original. The reply should be emotionally or thematically connected — a counterpoint, echo, or answer to the original.
+REPLY_CONTEXT_SYSTEM_PROMPT = """Given a snippet of song lyrics that was sent to you in place of a text message, generate a reply message pretending to be the intended recipient of the original. The reply should be emotionally or thematically connected — a counterpoint, echo, or answer to the original. Be playful but stay on theme.
 
 Always respond with valid JSON in this exact format:
 {
@@ -49,7 +52,13 @@ Always respond with valid JSON in this exact format:
 Do not include any text outside the JSON object."""
 
 
-def generate_song_prompt(*, input_message: str, mood: str | None, genre: str | None, model: str | None = None) -> dict:
+def generate_song_prompt(
+    *,
+    input_message: str,
+    mood: str | None = None,
+    genre: str | None = None,
+    model: str | None = None,
+) -> dict:
     model = model or DEFAULT_MODEL
 
     user_content = "\n".join([
@@ -77,12 +86,14 @@ def generate_song_prompt(*, input_message: str, mood: str | None, genre: str | N
 
 
 def generate_reply_context(
-    original_input_message: str, original_prompt: dict, model: str | None = None
+    original_input_message: str,
+    original_prompt: dict,
+    model: str | None = None,
 ) -> dict:
     model = model or DEFAULT_MODEL
 
     user_content = "\n".join([
-        f"Original message: {original_input_message}",
+        # f"Original message: {original_input_message}",
         f"Original lyrics:\n{original_prompt['lyrics']}",
     ])
 
@@ -100,6 +111,6 @@ def generate_reply_context(
 
     return {
         "input_message": parsed.get("reply_message", ""),
-        "mood": random.choice(MOODS),
+        # "mood": original_prompt['mood'],
         "genre": random.choice(GENRES),
     }
