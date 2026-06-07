@@ -1,5 +1,6 @@
 flask>=2.0.0
 demucs
+librosa
 openai-whisper
 openrouter>=0.9.0
 pillow
