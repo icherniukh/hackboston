@@ -57,7 +57,7 @@ def trim(
     cmd += ["-i", src, "-t", str(duration_seconds)]
     if fade_seconds:
         cmd += ["-af", f"afade=t=in:d={fade_seconds},afade=t=out:d={fade_seconds}:st={duration_seconds - fade_seconds}"]
-    cmd += ["-c:a", "libmp3lame", "-q:a", "2", dest]
+    cmd += ["-c:a", "aac", "-b:a", "256k", dest]
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:
         raise RuntimeError(f"ffmpeg trim failed: {proc.stderr.strip()}")

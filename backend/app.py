@@ -4,15 +4,13 @@ import os
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 
-from PIL import Image
 from flask import Flask, jsonify, request, send_file, Response
 
-from backend.integrations.openrouter import generate_song_prompt, generate_reply_context, generate_album_art
+from backend.integrations.openrouter import generate_song_prompt, generate_reply_context
 from backend.integrations.suno import generate_clip
 from backend.integrations.demucs import separate_vocals
-from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim, attach_cover
+from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim
 from backend.utils import mmssms_to_float_seconds
 
 logger = logging.getLogger(__name__)
@@ -43,10 +41,10 @@ def _postprocess_song(song_path: str, song_dir: str, t0: float) -> None:
     trim_end = min(song_duration, end_sec + 2)
 
     duration = trim_end - trim_start
-    trimmed_path = os.path.join(song_dir, "trimmed.mp3")
+    m4a_path = os.path.join(song_dir, "result.m4a")
     trim(
         src=song_path,
-        dest=trimmed_path,
+        dest=m4a_path,
         duration_seconds=duration,
         start_seconds=trim_start,
         fade_seconds=1.0,
@@ -71,40 +69,14 @@ def _produce_song(
     song_dir = os.path.join(OUTPUT_DIR, song_id)
     os.makedirs(song_dir, exist_ok=True)
 
-    pool = ThreadPoolExecutor(max_workers=2)
-    song_future = pool.submit(generate_clip,
+    clip = generate_clip(
         lyrics=prompt_result["lyrics"],
         style=prompt_result["style_prompt"],
         out_dir=song_dir,
     )
-    art_future = pool.submit(generate_album_art,
-        input_message=input_message,
-        out_dir=song_dir,
-    )
-    logger.info("[%+.1fs] clip+art submitted", time.monotonic() - t0)
-
-    clip = song_future.result()
     logger.info("[%+.1fs] clip ready", time.monotonic() - t0)
 
     _postprocess_song(clip.path, song_dir, t0)
-
-    cover_path = art_future.result()
-    pool.shutdown(wait=False)
-    logger.info("[%+.1fs] art ready", time.monotonic() - t0)
-
-    # Convert PNG cover to JPG for m4a embedding
-    cover_jpg = os.path.join(song_dir, "cover.jpg")
-    Image.open(cover_path).convert("RGB").save(cover_jpg, "JPEG")
-    logger.info("[%+.1fs] cover converted to JPG", time.monotonic() - t0)
-
-    # Combine audio + cover into m4a
-    m4a_path = os.path.join(song_dir, "result.m4a")
-    attach_cover(
-        audio_path=os.path.join(song_dir, "trimmed.mp3"),
-        cover_path=cover_jpg,
-        dest=m4a_path,
-    )
-    logger.info("[%+.1fs] m4a assembled", time.monotonic() - t0)
 
     response = {
         "id": song_id,
