@@ -1,7 +1,5 @@
 flask>=2.0.0
-demucs
-librosa
-openai-whisper
+demucs-infer
 openrouter>=0.9.0
 pillow
 torchcodec
