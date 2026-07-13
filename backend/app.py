@@ -33,7 +33,11 @@ def _postprocess_song(song_path: str, song_dir: str, t0: float) -> None:
     vocals_path = separate_vocals(song_path, output_dir=song_dir)
     logger.info("[%+.1fs] demucs done", time.monotonic() - t0)
 
-    first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-7)
+    # -7dB was misclassifying most of the actual singing as silence: demucs
+    # vocal stems in practice sit around -20 to -23dB mean volume (checked
+    # across several real generations), so nearly everything but the
+    # loudest peaks fell below a -7dB bar and got trimmed away.
+    first_end, last_start = detect_lyrics_bounds(input_path=vocals_path, noise_threshold_db=-30)
     logger.info("[%+.1fs] lyrics bounds detected", time.monotonic() - t0)
 
     start_sec = mmssms_to_float_seconds(first_end) if first_end else 0.0
