@@ -10,7 +10,7 @@ from PIL import Image
 from flask import Flask, jsonify, request, send_file, Response
 
 from backend.integrations.openrouter import generate_song_prompt, generate_reply_context, generate_album_art
-from backend.integrations.suno import generate_clip
+from backend.integrations.music_provider import generate_clip
 from backend.integrations.demucs import separate_vocals
 from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim, attach_cover
 from backend.utils import mmssms_to_float_seconds

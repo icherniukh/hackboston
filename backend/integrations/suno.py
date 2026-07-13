@@ -17,12 +17,12 @@ import argparse
 import os
 import sys
 import time
-from dataclasses import dataclass, field
 from typing import Optional
 
 import requests
 
 from backend.integrations.ffmpeg import trim
+from backend.integrations.music_types import Clip
 from backend.secrets import SUNO_API_KEY
 
 BASE_URL = "https://api.suno.com"
@@ -40,17 +40,6 @@ _DONE = {"complete", "error"}
 
 class SunoError(RuntimeError):
     """Raised when the Suno API returns an error or a job fails."""
-
-
-@dataclass
-class Clip:
-    """Result of a completed generation."""
-
-    id: str
-    status: str
-    audio_url: str
-    title: Optional[str] = None
-    raw: dict = field(default_factory=dict)
 
 
 class SunoClient:
