@@ -23,6 +23,7 @@ logging.basicConfig(level=logging.INFO)
 
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+STATIC_DIR = os.path.join(os.path.dirname(__file__), "static")
 
 # In-memory tracking for reply song jobs: song_id -> {event, result}
 reply_jobs: dict[str, dict] = {}
@@ -121,6 +122,11 @@ def _produce_song(
     return response
 
 
+@app.route("/")
+def index():
+    return send_file(os.path.join(STATIC_DIR, "index.html"))
+
+
 @app.route("/generate-song", methods=["POST"])
 def generate_song_endpoint():
     t0 = time.monotonic()
@@ -159,7 +165,8 @@ def generate_song_endpoint():
             reply_event.set()
 
     # Original OpenRouter (lyrics + style_prompt)
-    prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre)
+    lyrics_model = data.get("lyrics_model")
+    prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre, model=lyrics_model)
     logger.info("[%+.1fs] song prompt generated", time.monotonic() - t0)
 
     # Kick off reply pipeline — its OpenRouter calls run while original Suno generates

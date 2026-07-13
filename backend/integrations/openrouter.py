@@ -7,7 +7,7 @@ from openrouter import OpenRouter
 
 from backend.secrets import OPENROUTER_API_KEY
 
-DEFAULT_MODEL = "google/gemma-4-31b-it"
+DEFAULT_MODEL = "z-ai/glm-5.2"
 IMAGE_MODEL = "google/gemini-3.1-flash-image-preview"
 
 SONG_PROMPT_SYSTEM_PROMPT = """You are a creative songwriter and music prompt engineer. Given a user's input message and a desired mood, you produce TWO things:

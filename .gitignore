@@ -5,6 +5,7 @@
 .deactivate.sh
 .idea/
 backend/output/
+backend/test_runs/
 backend/secrets.py
 backend/server.log
 input-songs/
