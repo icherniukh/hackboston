@@ -69,9 +69,10 @@ def _produce_song(
     song_id: str | None = None,
     mood: str | None = None,
     genre: str | None = None,
+    music_model: str | None = None,
     t0: float = 0.0,
 ) -> dict:
-    """Generate a Suno clip, post-process, generate album art, and persist the response.
+    """Generate a music clip, post-process, generate album art, and persist the response.
 
     Returns response_dict.
     """
@@ -83,6 +84,7 @@ def _produce_song(
     song_future = pool.submit(generate_clip,
         lyrics=prompt_result["lyrics"],
         style=prompt_result["style_prompt"],
+        provider=music_model,
         out_dir=song_dir,
     )
     art_future = pool.submit(generate_album_art,
@@ -165,6 +167,7 @@ def generate_song_endpoint():
                 input_message=reply_context["input_message"],
                 mood=reply_context.get("mood"),
                 genre=reply_context.get("genre"),
+                music_model=music_model,
             )
         except Exception as e:
             reply_jobs[song_id]["result"] = {"error": str(e)}
@@ -173,6 +176,7 @@ def generate_song_endpoint():
 
     # Original OpenRouter (lyrics + style_prompt)
     lyrics_model = data.get("lyrics_model")
+    music_model = data.get("music_model")
     prompt_result = generate_song_prompt(input_message=input_message, mood=mood, genre=genre, model=lyrics_model)
     logger.info("[%+.1fs] song prompt generated", time.monotonic() - t0)
 
@@ -186,6 +190,7 @@ def generate_song_endpoint():
         song_id=song_id,
         mood=mood,
         genre=genre,
+        music_model=music_model,
         t0=t0,
     )
     original_suno_done.set()
