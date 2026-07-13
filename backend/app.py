@@ -43,14 +43,21 @@ def _postprocess_song(song_path: str, song_dir: str, t0: float) -> None:
     trim_start = max(0.0, start_sec - 2)
     trim_end = min(song_duration, end_sec + 2)
 
+    fade_seconds = 1.0
     duration = trim_end - trim_start
+    if duration <= fade_seconds:
+        # Vocal bounds detection found no clear window (e.g. inverted or
+        # near-zero span) — fall back to the untrimmed clip rather than
+        # handing ffmpeg a fade longer than the clip itself.
+        trim_start, duration = 0.0, song_duration
+
     trimmed_path = os.path.join(song_dir, "trimmed.mp3")
     trim(
         src=song_path,
         dest=trimmed_path,
         duration_seconds=duration,
         start_seconds=trim_start,
-        fade_seconds=1.0,
+        fade_seconds=fade_seconds,
     )
     logger.info("[%+.1fs] trim done", time.monotonic() - t0)
 
