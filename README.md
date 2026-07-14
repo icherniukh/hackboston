@@ -26,6 +26,52 @@ model per-request. Task tracking for this area (Replicate model discovery, a
 lyrics/style-mixing issue on single-prompt models, demucs/whisper → fal.ai migration) is in
 `bd` (beads) — run `bd list` / `bd ready`.
 
+### Architecture
+
+Module-level view of `POST /generate-song`, in actual call order (not just "who imports
+whom" — the numbers show the real data-dependency chain, esp. around demucs):
+
+```mermaid
+flowchart TB
+    Client(["Web client / iOS client"]) -->|"1"| R1["POST /generate-song<br>(backend/app.py)"]
+
+    R1 -->|"2"| OR1["openrouter.py<br>generate_song_prompt<br>→ lyrics + style prompt"]
+
+    OR1 -->|"3a"| MP["music_provider.py<br>dispatch by music_model / MUSIC_PROVIDER"]
+    OR1 -->|"3b, parallel<br>(2-worker pool)"| OR2["openrouter.py<br>generate_album_art"]
+
+    MP --> SU["suno.py"]
+    MP --> FM["fal_music.py<br>ACE-Step, MiniMax v2/2.5/2.6,<br>Lyria 3, ElevenLabs"]
+    MP --> RM["replicate_music.py<br>ACE-Step 1.5"]
+    SU & FM & RM -->|"raw clip"| Clip(("clip.mp3"))
+
+    Clip -->|"4"| DM["demucs.py separate_vocals<br>(ffmpeg → WAV, then demucs-mlx)<br>→ vocals.wav, thrown away after use"]
+    DM -->|"5"| FFB["ffmpeg.py detect_lyrics_bounds<br>silencedetect on the ISOLATED VOCAL STEM<br>(raw mix is too noisy to detect silence on)"]
+    Clip -->|"6, using bounds from 5"| FFT["ffmpeg.py trim<br>trims/fades the ORIGINAL full-mix clip"]
+    FFB --> FFT
+
+    OR2 -->|"7"| JPG["Pillow: cover PNG → JPG"]
+    FFT -->|"8"| FFA["ffmpeg.py attach_cover<br>mux trimmed audio + cover → result.m4a"]
+    JPG --> FFA
+
+    FFA -->|"9"| R3["GET /songs/&lt;id&gt;.m4a"]
+
+    subgraph external["External services"]
+        OpenRouterAPI["OpenRouter API"]
+        SunoAPI["Suno API"]
+        FalAPI["fal.ai API"]
+        ReplicateAPI["Replicate API"]
+    end
+    OR1 & OR2 -.-> OpenRouterAPI
+    SU -.-> SunoAPI
+    FM -.-> FalAPI
+    RM -.-> ReplicateAPI
+```
+
+`backend/integrations/whisper.py` is dead code — not called anywhere in this pipeline.
+Transcription-based lyric-bounds detection was superseded by the demucs+silencedetect
+approach above (see Milestone 1 notes).
+
 ### Milestone 1 – Song generation
 - [x] LLM integration
 	- Model: z-ai/glm-5.2 (client-configurable per request; several others compared —
@@ -42,26 +88,7 @@ lyrics/style-mixing issue on single-prompt models, demucs/whisper → fal.ai mig
 - [x] Silence scanning
   - Note: the noise threshold needed tuning (-7dB was misclassifying most actual singing
     as silence since vocal stems sit around -20 to -23dB mean volume; fixed to -30dB)
-
-```mermaid
-flowchart TD
-    A0["<b>POST /generate-song</b><br>Receive input message, optional mood/genre, optional lyrics_model/music_model"]
-    A["OpenRouter LLM (default z-ai/glm-5.2)<br><b>generate lyrics and style prompt</b>"] --> B1
-    A0 --> A
-    A --> B2
-
-    subgraph parallel["Thread pool (2 workers)"]
-        B1["<b>music_provider dispatch</b><br>Suno / fal.ai / Replicate,<br>picked by music_model or MUSIC_PROVIDER"]
-        B2["gemini-3.1-flash-image-preview<br>(via OpenRouter) produce album art"]
-    end
-
-    B1 --> C0["ffmpeg: → WAV for demucs input"]
-    C0 --> C["demucs-mlx: separate the vocals stem"]
-    C --> D["ffmpeg: detect vocals bounds via silencedetect filter"]
-    B2 --> F["Pillow: PNG → JPG<br>(for filesize savings)"]
-    D & F --> G["ffmpeg trim, fade & attach cover"]
-    G --> H["Serve as <b>GET /songs/&lt;id&gt;.m4a</b>"]
-```
+  - See the [Architecture](#architecture) diagram above for the full call order.
 
 ### Milestone 2 – Backend response
 - [x] `expect-reply` client poll API taking the reference uuid — implemented
