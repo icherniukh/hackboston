@@ -12,10 +12,12 @@ import SoundsGoodCore
 final class ConversationControllerImpl: ConversationController {
     var messageControllers: [any MessageController] = []
 
-    func send(text: String, genre: String) {
+    func send(text: String, genre: String, lyricsModel: String?, musicModel: String?) {
         let controller = MessageControllerImpl(
             message: text,
             genre: genre,
+            lyricsModel: lyricsModel,
+            musicModel: musicModel,
             source: MessageSource.me,
             songService: MessageToSongServiceImpl(),
             downloadService: SongDownloadServiceImpl()
