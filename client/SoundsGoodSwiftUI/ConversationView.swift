@@ -195,7 +195,7 @@ struct ConversationView: View {
 }
 
 private enum Genre {
-    static let all = ["pop", "hip-hop", "edm", "metal", "country", "indie pop", "rock", "jazz", "r&b", "classical"]
+    static let all = ["pop", "hip-hop", "edm", "metal", "country", "indie pop", "rock", "jazz", "r&b", "classical", "trap", "trap hip hop", "dark minimal techno", "tech house", "drum & bass"]
 }
 
 // Keys must match backend/integrations/openrouter.py's model ids.
