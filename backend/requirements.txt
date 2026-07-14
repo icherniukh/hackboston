@@ -1,5 +1,6 @@
 flask>=2.0.0
 fal-client
+replicate
 demucs
 librosa
 openai-whisper

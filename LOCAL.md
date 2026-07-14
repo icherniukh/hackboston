@@ -43,16 +43,25 @@ cp backend/secrets.py.example backend/secrets.py
 #   OPENROUTER_API_KEY
 #   SUNO_API_KEY
 #   FAL_API_KEY
+#   REPLICATE_API_TOKEN
 ```
 
-**Important:** `FAL_API_KEY` must be present in `backend/secrets.py` even if
-you only intend to use Suno right now. `backend/app.py` imports
-`music_provider`, which imports `fal_music` at module load time, which does
-`from backend.secrets import FAL_API_KEY` unconditionally — a missing name
-(not just an empty value) will raise `ImportError` on startup regardless of
-which provider you actually use. An empty string (`FAL_API_KEY=''`) is fine
-if you're not calling the fal.ai path yet; the value is only used the moment
-a fal.ai request actually goes out.
+**Important:** `FAL_API_KEY` and `REPLICATE_API_TOKEN` must be present in
+`backend/secrets.py` even if you don't intend to use those providers right
+now. `backend/app.py` imports `music_provider`, which imports `fal_music`
+and `replicate_music` at module load time, which do
+`from backend.secrets import FAL_API_KEY` / `REPLICATE_API_TOKEN`
+unconditionally — a missing name (not just an empty value) will raise
+`ImportError` on startup regardless of which provider you actually use. An
+empty string (`FAL_API_KEY=''`) is fine if you're not calling that path yet;
+the value is only used the moment a request to that provider actually goes
+out.
+
+**Replicate note:** `replicate-ace-step-1.5` (fishaudio/ace-step-1.5) is
+wired up and verified against a live generation. It's not an "official"
+Replicate model, so predictions need a version-pinned reference
+(`owner/name:version_id`) — the module resolves the latest version
+dynamically at call time rather than hardcoding a hash.
 
 ## Running
 

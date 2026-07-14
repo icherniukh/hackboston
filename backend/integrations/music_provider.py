@@ -3,8 +3,8 @@
 Every entry in _PROVIDERS exposes the same
 generate_clip(*, out_dir, lyrics, style, ...) -> Clip shape; this module
 picks between them so call sites don't need to know which one is active.
-Adding a new model (e.g. once Replicate is wired up, see falai-ygp) is just
-one new dict entry — no changes needed here beyond that.
+Adding a new model is just one new dict entry — no changes needed here
+beyond that.
 
 Provider is chosen (in order): the `provider` kwarg, the MUSIC_PROVIDER env
 var, then DEFAULT_PROVIDER. "fal" is kept as an alias for "ace-step" (fal's
@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from typing import Optional
 
-from backend.integrations import fal_music, suno
+from backend.integrations import fal_music, replicate_music, suno
 from backend.integrations.music_types import Clip
 
 DEFAULT_PROVIDER = "suno"
@@ -31,6 +31,7 @@ _PROVIDERS = {
     "minimax-v2.6": fal_music.generate_minimax_v26,
     "lyria3": fal_music.generate_lyria3,
     "elevenlabs": fal_music.generate_elevenlabs,
+    "replicate-ace-step-1.5": replicate_music.generate_ace_step_15,
 }
 
 
