@@ -4,7 +4,7 @@
       {
         "hooks": [
           {
-            "command": "bd codex-hook PostCompact",
+            "command": "bd codex-hook PostCompact --memories-only",
             "statusMessage": "Scheduling Beads context refresh",
             "type": "command"
           }
@@ -16,7 +16,7 @@
       {
         "hooks": [
           {
-            "command": "bd codex-hook PreCompact",
+            "command": "bd codex-hook PreCompact --memories-only",
             "statusMessage": "Checking Beads context",
             "type": "command"
           }
@@ -34,17 +34,6 @@
           }
         ],
         "matcher": "startup|resume|clear"
-      }
-    ],
-    "UserPromptSubmit": [
-      {
-        "hooks": [
-          {
-            "command": "bd codex-hook UserPromptSubmit",
-            "statusMessage": "Refreshing Beads context",
-            "type": "command"
-          }
-        ]
       }
     ]
   }
