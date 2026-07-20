@@ -21,9 +21,13 @@ dispatches to whichever model is picked (in order: request's `music_model` field
 - **Replicate** — ACE-Step 1.5 (`fishaudio/ace-step-1.5`), the actual 1.5 release; fal.ai
   only hosts the older v1
 
+The dispatcher owns the provider registry: adapters load lazily, duration is forwarded only
+to providers that support it, and provider-scoped source playback stays behind the same
+boundary. HTTP orchestration does not import a concrete music provider.
+
 Both the web test client and the SwiftUI iOS client let you pick lyrics model and music
 model per-request. Task tracking for this area (Replicate model discovery, a
-lyrics/style-mixing issue on single-prompt models, demucs/whisper → fal.ai migration) is in
+lyrics/style-mixing issue on single-prompt models, demucs → fal.ai migration) is in
 `bd` (beads) — run `bd list` / `bd ready`.
 
 ### Architecture
@@ -68,10 +72,6 @@ flowchart TB
     RM -.-> ReplicateAPI
 ```
 
-`backend/integrations/whisper.py` is dead code — not called anywhere in this pipeline.
-Transcription-based lyric-bounds detection was superseded by the demucs+silencedetect
-approach above (see Milestone 1 notes).
-
 ### Milestone 1 – Song generation
 - [x] LLM integration
 	- Model: z-ai/glm-5.2 (client-configurable per request; several others compared —
@@ -81,10 +81,6 @@ approach above (see Milestone 1 notes).
 - [x] Suno integration
 	- [x] fal.ai and Replicate as alternative/additional providers, client-selectable
 - [x] Stemming
-- [x] ~~Transcribing~~
-  - [x] Idea done: transcription (whisper) is no longer in the live pipeline —
-    `backend/integrations/whisper.py` is unused now. Vocal bounds are found directly via
-    ffmpeg's `silencedetect` on the demucs-separated vocal stem.
 - [x] Silence scanning
   - Note: the noise threshold needed tuning (-7dB was misclassifying most actual singing
     as silence since vocal stems sit around -20 to -23dB mean volume; fixed to -30dB)
