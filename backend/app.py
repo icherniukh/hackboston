@@ -1,5 +1,6 @@
 import json
 import logging
+import mimetypes
 import os
 import threading
 import time
@@ -7,10 +8,15 @@ import uuid
 from concurrent.futures import ThreadPoolExecutor
 
 from PIL import Image
-from flask import Flask, jsonify, request, send_file, Response
+from flask import Flask, jsonify, redirect, request, send_file, Response
 
 from backend.integrations.openrouter import generate_song_prompt, generate_reply_context, generate_album_art
-from backend.integrations.music_provider import generate_clip
+from backend.integrations.music_provider import (
+    generate_clip,
+    mint_playback_url,
+    provider_capabilities,
+    resolve_provider,
+)
 from backend.integrations.demucs import separate_vocals
 from backend.integrations.ffmpeg import detect_lyrics_bounds, get_duration, trim, attach_cover
 from backend.utils import mmssms_to_float_seconds
@@ -83,12 +89,13 @@ def _produce_song(
     song_id = song_id or str(uuid.uuid4())
     song_dir = os.path.join(OUTPUT_DIR, song_id)
     os.makedirs(song_dir, exist_ok=True)
+    provider_id, _ = resolve_provider(music_model)
 
     pool = ThreadPoolExecutor(max_workers=2)
     song_future = pool.submit(generate_clip,
         lyrics=prompt_result["lyrics"],
         style=prompt_result["style_prompt"],
-        provider=music_model,
+        provider=provider_id,
         out_dir=song_dir,
     )
     art_future = pool.submit(generate_album_art,
@@ -129,6 +136,15 @@ def _produce_song(
         "style_prompt": prompt_result["style_prompt"],
         "result_url": f"/songs/{song_id}.m4a",
     }
+    source = {
+        "provider": provider_id,
+        "clip_id": clip.id,
+        "file_name": os.path.basename(clip.path),
+        "local_url": f"/songs/{song_id}/source",
+    }
+    if provider_capabilities(provider_id).supports_playback_url and clip.id:
+        source["playback_url"] = f"/songs/{song_id}/source/playback"
+    response["source"] = source
     with open(os.path.join(song_dir, "response.json"), "w") as f:
         json.dump(response, f, indent=2)
 
@@ -187,16 +203,20 @@ def generate_song_endpoint():
     # Kick off reply pipeline — its OpenRouter calls run while original Suno generates
     # threading.Thread(target=run_reply_pipeline, daemon=True).start()
 
-    # Original Suno + postprocess
-    response = _produce_song(
-        prompt_result=prompt_result,
-        input_message=input_message,
-        song_id=song_id,
-        mood=mood,
-        genre=genre,
-        music_model=music_model,
-        t0=t0,
-    )
+    try:
+        response = _produce_song(
+            prompt_result=prompt_result,
+            input_message=input_message,
+            song_id=song_id,
+            mood=mood,
+            genre=genre,
+            music_model=music_model,
+            t0=t0,
+        )
+    except Exception as e:
+        logger.exception("Error producing song")
+        return jsonify({"error": str(e)}), 500
+
     original_suno_done.set()
 
     logger.info("[%+.1fs] endpoint complete", time.monotonic() - t0)
@@ -228,6 +248,51 @@ def stream_song(song_id):
     if not os.path.exists(filepath):
         return Response(status=404)
     return send_file(filepath, mimetype="audio/mp4")
+
+
+def _load_source_metadata(song_id: str) -> dict | None:
+    """Read a persisted source-artifact manifest without trusting file paths."""
+    metadata_path = os.path.join(OUTPUT_DIR, song_id, "response.json")
+    try:
+        with open(metadata_path) as metadata_file:
+            source = json.load(metadata_file).get("source")
+    except (OSError, json.JSONDecodeError):
+        return None
+    if not isinstance(source, dict):
+        return None
+    file_name = source.get("file_name")
+    if not isinstance(file_name, str) or file_name != os.path.basename(file_name):
+        return None
+    return source
+
+
+@app.route("/songs/<song_id>/source")
+def stream_source(song_id):
+    """Serve the unprocessed provider artifact retained for analysis."""
+    source = _load_source_metadata(song_id)
+    if source is None:
+        return Response(status=404)
+    filepath = os.path.join(OUTPUT_DIR, song_id, source["file_name"])
+    if not os.path.exists(filepath):
+        return Response(status=404)
+    mimetype, _ = mimetypes.guess_type(filepath)
+    return send_file(filepath, mimetype=mimetype or "application/octet-stream")
+
+
+@app.route("/songs/<song_id>/source/playback")
+def open_source_playback(song_id):
+    """Redirect to a fresh provider-managed source playback URL."""
+    source = _load_source_metadata(song_id)
+    if source is None or not source.get("clip_id"):
+        return Response(status=404)
+
+    try:
+        return redirect(mint_playback_url(source["provider"], source["clip_id"]))
+    except ValueError:
+        return Response(status=404)
+    except Exception:
+        logger.exception("Could not mint source playback URL for %s", song_id)
+        return jsonify({"error": "Could not mint source playback URL"}), 502
 
 
 @app.route("/health")

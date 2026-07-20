@@ -73,6 +73,9 @@
   #status { margin-top: 16px; font-size: 13px; color: #999; white-space: pre-wrap; }
   #result { margin-top: 20px; display: none; }
   #result audio { width: 100%; margin-top: 8px; }
+  .audio-output + .audio-output { margin-top: 16px; }
+  .audio-label { display: block; font-size: 12px; color: #999; }
+  .playback-link { display: inline-block; margin-top: 8px; color: #8baeff; font-size: 13px; }
   #result .lyrics { font-size: 13px; color: #aaa; white-space: pre-wrap; margin-top: 8px; }
   .error { color: #ff6b6b; }
 </style>
@@ -95,7 +98,15 @@
   <div id="status"></div>
 
   <div id="result">
-    <audio id="player" controls autoplay></audio>
+    <section class="audio-output">
+      <span class="audio-label">Final mix</span>
+      <audio id="player" controls autoplay></audio>
+    </section>
+    <section class="audio-output" id="source-audio" hidden>
+      <span class="audio-label" id="source-label">Original generation</span>
+      <audio id="source-player" controls></audio>
+      <a class="playback-link" id="source-playback-link" target="_blank" hidden></a>
+    </section>
     <div class="lyrics" id="lyrics"></div>
   </div>
 
@@ -123,10 +134,9 @@
   });
 
   // Keys must match backend/integrations/music_provider.py's _PROVIDERS dict.
-  // Adding a Replicate (or other) provider later is: add its models to
-  // _PROVIDERS, then add a matching group here.
+  // Preselect a concrete model (no empty "server default" option).
+  const DEFAULT_MUSIC_MODEL = "suno";
   const MUSIC_MODELS = [
-    { id: "", label: "Server default" },
     { group: "fal.ai", options: [
       { id: "ace-step", label: "ACE-Step" },
       { id: "ace-step-prompt", label: "ACE-Step (prompt-to-audio)" },
@@ -141,6 +151,13 @@
     ]},
     { group: "Replicate", options: [
       { id: "replicate-ace-step-1.5", label: "ACE-Step 1.5" },
+      { id: "replicate-stable-audio-2.5", label: "Stable Audio 2.5" },
+    ]},
+    { group: "Runware", options: [
+      { id: "runware", label: "Runware Default" },
+      { id: "runware:ace-step@v1.5-xl-sft", label: "ACE-Step v1.5 XL SFT" },
+      { id: "runware:ace-step@v1.5-xl-turbo", label: "ACE-Step v1.5 XL Turbo" },
+      { id: "runware:ace-step@v1.5-xl-base", label: "ACE-Step v1.5 XL Base" },
     ]},
   ];
 
@@ -149,17 +166,14 @@
     const opt = document.createElement("option");
     opt.value = m.id;
     opt.textContent = m.label;
+    if (m.id === DEFAULT_MUSIC_MODEL) opt.selected = true;
     return opt;
   };
   MUSIC_MODELS.forEach(entry => {
-    if (entry.group) {
-      const group = document.createElement("optgroup");
-      group.label = entry.group;
-      entry.options.forEach(m => group.appendChild(makeOption(m)));
-      musicModelEl.appendChild(group);
-    } else {
-      musicModelEl.appendChild(makeOption(entry));
-    }
+    const group = document.createElement("optgroup");
+    group.label = entry.group;
+    entry.options.forEach(m => group.appendChild(makeOption(m)));
+    musicModelEl.appendChild(group);
   });
 
   const genresEl = document.getElementById("genres");
@@ -179,6 +193,10 @@
   const statusEl = document.getElementById("status");
   const resultEl = document.getElementById("result");
   const playerEl = document.getElementById("player");
+  const sourceAudioEl = document.getElementById("source-audio");
+  const sourceLabelEl = document.getElementById("source-label");
+  const sourcePlayerEl = document.getElementById("source-player");
+  const sourcePlaybackLinkEl = document.getElementById("source-playback-link");
   const lyricsEl = document.getElementById("lyrics");
 
   goEl.onclick = async () => {
@@ -191,6 +209,9 @@
 
     goEl.disabled = true;
     resultEl.style.display = "none";
+    sourceAudioEl.hidden = true;
+    sourcePlayerEl.removeAttribute("src");
+    sourcePlayerEl.load();
     statusEl.className = "";
     statusEl.textContent = "Generating (usually ~1 minute)...";
 
@@ -202,7 +223,7 @@
           input_message,
           genre: selectedGenre,
           lyrics_model: lyricsModelEl.value,
-          ...(musicModelEl.value ? { music_model: musicModelEl.value } : {}),
+          music_model: musicModelEl.value,
         }),
       });
       const data = await res.json();
@@ -212,6 +233,14 @@
 
       statusEl.textContent = "";
       playerEl.src = data.result_url;
+      if (data.source) {
+        sourcePlayerEl.src = data.source.local_url;
+        sourceLabelEl.textContent = `Original ${data.source.provider} generation`;
+        sourcePlaybackLinkEl.hidden = !data.source.playback_url;
+        sourcePlaybackLinkEl.href = data.source.playback_url || "";
+        sourcePlaybackLinkEl.textContent = `Open directly from ${data.source.provider}`;
+        sourceAudioEl.hidden = false;
+      }
       lyricsEl.textContent = data.lyrics || "";
       resultEl.style.display = "block";
     } catch (err) {
