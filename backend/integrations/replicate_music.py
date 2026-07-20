@@ -74,3 +74,64 @@ def generate_ace_step_15(
         path=dest,
         raw={"output_url": audio_url},
     )
+
+
+def generate_stable_audio_25(
+    *,
+    out_dir: str,
+    lyrics: Optional[str] = None,
+    style: Optional[str] = None,
+    duration: Optional[float] = None,
+    on_status=None,
+) -> Clip:
+    """stability-ai/stable-audio-2.5 on Replicate."""
+    prompt = ""
+    if style:
+        prompt += f"Style: {style} "
+    if lyrics:
+        prompt += f"Lyrics: {lyrics}"
+
+    arguments = {
+        "prompt": prompt.strip() or "A beautiful instrumental",
+        "duration": int(duration) if duration else DEFAULT_DURATION_SECONDS,
+    }
+
+    if on_status:
+        on_status("IN_PROGRESS")
+
+    try:
+        output = replicate.run("stability-ai/stable-audio-2.5", input=arguments)
+    except Exception as e:
+        # Fallback if that fails for some reason
+        model_id = "stability-ai/stable-audio-2.5"
+        version_id = replicate.models.get(model_id).latest_version.id
+        output = replicate.run(f"{model_id}:{version_id}", input=arguments)
+
+    file_output = output[0] if isinstance(output, list) else output
+    audio_url = file_output.url if hasattr(file_output, "url") else str(file_output)
+
+    os.makedirs(out_dir, exist_ok=True)
+    dest = os.path.join(out_dir, "stable_audio_25.wav")
+    
+    # Check if we got a FileOutput object or just a URL string
+    if hasattr(file_output, "read"):
+        audio_bytes = file_output.read()
+        with open(dest, "wb") as fh:
+            fh.write(audio_bytes)
+    else:
+        import requests
+        response = requests.get(audio_url)
+        response.raise_for_status()
+        with open(dest, "wb") as fh:
+            fh.write(response.content)
+
+    if on_status:
+        on_status("COMPLETED")
+
+    return Clip(
+        id="",
+        status="complete",
+        audio_url=audio_url,
+        path=dest,
+        raw={"output_url": audio_url},
+    )

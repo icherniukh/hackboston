@@ -1,46 +1,134 @@
-"""Dispatches music generation to a configured provider/model.
-
-Every entry in _PROVIDERS exposes the same
-generate_clip(*, out_dir, lyrics, style, ...) -> Clip shape; this module
-picks between them so call sites don't need to know which one is active.
-Adding a new model is just one new dict entry — no changes needed here
-beyond that.
-
-Provider is chosen (in order): the `provider` kwarg, the MUSIC_PROVIDER env
-var, then DEFAULT_PROVIDER. "fal" is kept as an alias for "ace-step" (fal's
-original default) so existing MUSIC_PROVIDER=fal setups keep working.
-"""
+"""Resolve music providers and their provider-owned capabilities."""
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
+from importlib import import_module
 import os
-from typing import Optional
+from typing import Any, Optional
 
-from backend.integrations import fal_music, replicate_music, suno
 from backend.integrations.music_types import Clip
 
 DEFAULT_PROVIDER = "suno"
 
-_PROVIDERS = {
-    "suno": suno.generate_clip,
-    "fal": fal_music.generate_ace_step,  # back-compat alias
-    "ace-step": fal_music.generate_ace_step,
-    "ace-step-prompt": fal_music.generate_ace_step_prompt_to_audio,
-    "minimax-v2": fal_music.generate_minimax_v2,
-    "minimax-v2.5": fal_music.generate_minimax_v25,
-    "minimax-v2.6": fal_music.generate_minimax_v26,
-    "lyria3": fal_music.generate_lyria3,
-    "elevenlabs": fal_music.generate_elevenlabs,
-    "replicate-ace-step-1.5": replicate_music.generate_ace_step_15,
+
+@dataclass(frozen=True)
+class ProviderCapabilities:
+    """Behavior guaranteed by one concrete provider integration."""
+
+    supports_duration: bool = False
+    supports_playback_url: bool = False
+
+
+@dataclass(frozen=True)
+class ProviderDefinition:
+    """The provider boundary: adapter module, callable, and fixed model inputs."""
+
+    module_name: str
+    generate_name: str
+    capabilities: ProviderCapabilities = field(default_factory=ProviderCapabilities)
+    fixed_kwargs: dict[str, Any] = field(default_factory=dict)
+
+
+_PROVIDERS: dict[str, ProviderDefinition] = {
+    "suno": ProviderDefinition(
+        "backend.integrations.suno",
+        "generate_clip",
+        ProviderCapabilities(supports_playback_url=True),
+    ),
+    "fal": ProviderDefinition(
+        "backend.integrations.fal_music",
+        "generate_ace_step",
+        ProviderCapabilities(supports_duration=True),
+    ),
+    "ace-step": ProviderDefinition(
+        "backend.integrations.fal_music",
+        "generate_ace_step",
+        ProviderCapabilities(supports_duration=True),
+    ),
+    "ace-step-prompt": ProviderDefinition(
+        "backend.integrations.fal_music",
+        "generate_ace_step_prompt_to_audio",
+        ProviderCapabilities(supports_duration=True),
+    ),
+    "minimax-v2": ProviderDefinition("backend.integrations.fal_music", "generate_minimax_v2"),
+    "minimax-v2.5": ProviderDefinition("backend.integrations.fal_music", "generate_minimax_v25"),
+    "minimax-v2.6": ProviderDefinition("backend.integrations.fal_music", "generate_minimax_v26"),
+    "lyria3": ProviderDefinition("backend.integrations.fal_music", "generate_lyria3"),
+    "elevenlabs": ProviderDefinition(
+        "backend.integrations.fal_music",
+        "generate_elevenlabs",
+        ProviderCapabilities(supports_duration=True),
+    ),
+    "replicate-ace-step-1.5": ProviderDefinition(
+        "backend.integrations.replicate_music",
+        "generate_ace_step_15",
+        ProviderCapabilities(supports_duration=True),
+    ),
+    "replicate-stable-audio-2.5": ProviderDefinition(
+        "backend.integrations.replicate_music",
+        "generate_stable_audio_25",
+        ProviderCapabilities(supports_duration=True),
+    ),
+    "runware": ProviderDefinition("backend.integrations.runware_music", "generate_runware"),
+    "runware:ace-step@v1.5-xl-sft": ProviderDefinition(
+        "backend.integrations.runware_music",
+        "generate_runware",
+        fixed_kwargs={"model": "runware:ace-step@v1.5-xl-sft"},
+    ),
+    "runware:ace-step@v1.5-xl-turbo": ProviderDefinition(
+        "backend.integrations.runware_music",
+        "generate_runware",
+        fixed_kwargs={"model": "runware:ace-step@v1.5-xl-turbo"},
+    ),
+    "runware:ace-step@v1.5-xl-base": ProviderDefinition(
+        "backend.integrations.runware_music",
+        "generate_runware",
+        fixed_kwargs={"model": "runware:ace-step@v1.5-xl-base"},
+    ),
 }
 
 
-def generate_clip(*, out_dir: str, provider: Optional[str] = None, **kwargs) -> Clip:
-    provider = provider or os.environ.get("MUSIC_PROVIDER", DEFAULT_PROVIDER)
+def resolve_provider(provider: Optional[str] = None) -> tuple[str, ProviderDefinition]:
+    """Return the selected provider's stable identifier and definition."""
+    provider_id = provider or os.environ.get("MUSIC_PROVIDER", DEFAULT_PROVIDER)
     try:
-        fn = _PROVIDERS[provider]
-    except KeyError:
+        return provider_id, _PROVIDERS[provider_id]
+    except KeyError as exc:
         raise ValueError(
-            f"Unknown MUSIC_PROVIDER {provider!r}; choose from {sorted(_PROVIDERS)}."
-        )
-    return fn(out_dir=out_dir, **kwargs)
+            f"Unknown MUSIC_PROVIDER {provider_id!r}; choose from {sorted(_PROVIDERS)}."
+        ) from exc
+
+
+def provider_capabilities(provider: Optional[str] = None) -> ProviderCapabilities:
+    """Expose capabilities without importing an adapter or validating its key."""
+    _, definition = resolve_provider(provider)
+    return definition.capabilities
+
+
+def generate_clip(
+    *,
+    out_dir: str,
+    provider: Optional[str] = None,
+    duration: Optional[float] = None,
+    **kwargs,
+) -> Clip:
+    """Generate a clip through one lazily loaded provider adapter."""
+    _, definition = resolve_provider(provider)
+    arguments = {**definition.fixed_kwargs, **kwargs}
+    if duration is not None and definition.capabilities.supports_duration:
+        arguments["duration"] = duration
+
+    module = import_module(definition.module_name)
+    generate = getattr(module, definition.generate_name)
+    return generate(out_dir=out_dir, **arguments)
+
+
+def mint_playback_url(provider: str, clip_id: str) -> str:
+    """Mint provider-managed browser playback when that provider supports it."""
+    _, definition = resolve_provider(provider)
+    if not definition.capabilities.supports_playback_url:
+        raise ValueError(f"Provider {provider!r} does not support source playback URLs.")
+
+    module = import_module(definition.module_name)
+    return module.mint_playback_url(clip_id)

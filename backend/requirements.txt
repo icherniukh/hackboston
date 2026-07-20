@@ -3,8 +3,8 @@ fal-client
 replicate
 demucs
 librosa
-openai-whisper
 openrouter>=0.9.0
 pillow
 torchcodec
 requests>=2.25.0
+runware-sdk

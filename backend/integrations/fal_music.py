@@ -37,10 +37,18 @@ DEFAULT_DURATION_SECONDS = 30
 
 
 def _blend_lyrics_into_prompt(style: Optional[str], lyrics: Optional[str]) -> str:
-    """For models with no dedicated lyrics field: fold the hook into the prompt."""
+    """For models with no dedicated lyrics field: fold the hook into the prompt.
+
+    Explicit quoting/framing (vs. a plain "Vocal hook lyrics: ..." suffix) is
+    there to stop the model from singing the style description instead of —
+    or blended with — the actual lyrics.
+    """
     prompt = style or ""
     if lyrics:
-        prompt = f"{prompt} Vocal hook lyrics: {lyrics}".strip()
+        prompt = (
+            f'{prompt} The ONLY words to sing, verbatim, in quotes: "{lyrics}". '
+            "Everything before this sentence is style/production guidance, not lyrics to vocalize."
+        ).strip()
     return prompt
 
 
@@ -119,7 +127,6 @@ def generate_minimax_v2(
     out_dir: str,
     lyrics: Optional[str] = None,
     style: Optional[str] = None,
-    duration: Optional[float] = None,
     on_status=None,
 ) -> Clip:
     """fal-ai/minimax-music/v2 — `prompt` + dedicated `lyrics_prompt` field. No duration control."""
@@ -145,7 +152,6 @@ def generate_minimax_v25(
     out_dir: str,
     lyrics: Optional[str] = None,
     style: Optional[str] = None,
-    duration: Optional[float] = None,
     on_status=None,
 ) -> Clip:
     """fal-ai/minimax-music/v2.5 — `prompt` + `lyrics` + `is_instrumental`. No duration control."""
@@ -160,7 +166,6 @@ def generate_minimax_v26(
     out_dir: str,
     lyrics: Optional[str] = None,
     style: Optional[str] = None,
-    duration: Optional[float] = None,
     on_status=None,
 ) -> Clip:
     """fal-ai/minimax-music/v2.6 — `prompt` + `lyrics` + `is_instrumental`. No duration control."""
@@ -175,12 +180,33 @@ def generate_lyria3(
     out_dir: str,
     lyrics: Optional[str] = None,
     style: Optional[str] = None,
-    duration: Optional[float] = None,
     on_status=None,
 ) -> Clip:
     """fal-ai/lyria3 — single `prompt` field, no lyrics field, no duration control (fixed ~30s)."""
     arguments = {"prompt": _blend_lyrics_into_prompt(style, lyrics)}
     return _run("fal-ai/lyria3", arguments, out_dir=out_dir, filename_stem="lyria3", on_status=on_status)
+
+
+def _composition_plan_from_lyrics(*, lyrics: str, style: Optional[str], duration_ms: int) -> dict:
+    """Build an ElevenLabs MusicCompositionPlan (one section) so the lyric
+    lines are sung verbatim instead of being blended into — and sometimes
+    sung as — the style prompt. Section `duration_ms` is capped to the
+    model's allowed 3000-120000ms range.
+    """
+    lines = [line.strip() for line in lyrics.splitlines() if line.strip()]
+    return {
+        "positive_global_styles": [style] if style else [],
+        "negative_global_styles": [],
+        "sections": [
+            {
+                "section_name": "Hook",
+                "positive_local_styles": [],
+                "negative_local_styles": [],
+                "duration_ms": max(3_000, min(120_000, duration_ms)),
+                "lines": lines,
+            }
+        ],
+    }
 
 
 def generate_elevenlabs(
@@ -191,12 +217,27 @@ def generate_elevenlabs(
     duration: Optional[float] = None,
     on_status=None,
 ) -> Clip:
-    """fal-ai/elevenlabs/music — `prompt` + `music_length_ms`, no lyrics field."""
-    arguments = {
-        "prompt": _blend_lyrics_into_prompt(style, lyrics),
-        "music_length_ms": int((duration or DEFAULT_DURATION_SECONDS) * 1000),
-        "force_instrumental": not bool(lyrics),
-    }
+    """fal-ai/elevenlabs/music.
+
+    With lyrics: uses the structured `composition_plan` (positive_global_styles
+    + a section's `lines`) so the literal lyric text stays separate from the
+    style prompt, instead of both getting folded into one `prompt` string that
+    the model sometimes sang instead of the actual lyrics.
+    Without lyrics: flat `prompt` + `force_instrumental` mode — no lyrics to
+    keep separate, so the structured plan buys nothing.
+    """
+    duration_ms = int((duration or DEFAULT_DURATION_SECONDS) * 1000)
+    if lyrics:
+        arguments = {
+            "composition_plan": _composition_plan_from_lyrics(lyrics=lyrics, style=style, duration_ms=duration_ms),
+            "force_instrumental": False,
+        }
+    else:
+        arguments = {
+            "prompt": style or "",
+            "music_length_ms": duration_ms,
+            "force_instrumental": True,
+        }
     return _run("fal-ai/elevenlabs/music", arguments, out_dir=out_dir, filename_stem="elevenlabs", on_status=on_status)
 
 
