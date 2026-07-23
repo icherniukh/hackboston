@@ -28,7 +28,7 @@ struct ConversationView: View {
     @State private var messageText = ""
     @State private var selectedGenre = Genre.all.first!
     @State private var selectedLyricsModel = LyricsModel.all.first!.id
-    @State private var selectedMusicModel: String? = nil
+    @State private var selectedMusicModel = MusicModel.defaultId
     @FocusState private var isInputFocused: Bool
 
     @Bindable var viewModel: ConversationViewModel
@@ -137,7 +137,6 @@ struct ConversationView: View {
             }
 
             Menu {
-                Button("Server default") { selectedMusicModel = nil }
                 ForEach(MusicModel.groups, id: \.name) { group in
                     Menu(group.name) {
                         ForEach(group.options, id: \.id) { model in
@@ -160,13 +159,12 @@ struct ConversationView: View {
     }
 
     private var selectedMusicModelLabel: String {
-        guard let id = selectedMusicModel else { return "Default" }
         for group in MusicModel.groups {
-            if let match = group.options.first(where: { $0.id == id }) {
+            if let match = group.options.first(where: { $0.id == selectedMusicModel }) {
                 return match.label
             }
         }
-        return id
+        return selectedMusicModel
     }
 
     @ViewBuilder
@@ -214,6 +212,8 @@ private enum LyricsModel {
 
 // Groups/keys must match backend/integrations/music_provider.py's _PROVIDERS dict.
 private enum MusicModel {
+    /// Matches backend DEFAULT_PROVIDER when clients always send an explicit id.
+    static let defaultId = "suno"
     static let groups: [(name: String, options: [(id: String, label: String)])] = [
         ("fal.ai", [
             ("ace-step", "ACE-Step"),
@@ -225,7 +225,16 @@ private enum MusicModel {
             ("elevenlabs", "ElevenLabs Music"),
         ]),
         ("Suno", [("suno", "Suno")]),
-        ("Replicate", [("replicate-ace-step-1.5", "ACE-Step 1.5")]),
+        ("Replicate", [
+            ("replicate-ace-step-1.5", "ACE-Step 1.5"),
+            ("replicate-stable-audio-2.5", "Stable Audio 2.5"),
+        ]),
+        ("Runware", [
+            ("runware", "Runware Default"),
+            ("runware:ace-step@v1.5-xl-sft", "ACE-Step v1.5 XL SFT"),
+            ("runware:ace-step@v1.5-xl-turbo", "ACE-Step v1.5 XL Turbo"),
+            ("runware:ace-step@v1.5-xl-base", "ACE-Step v1.5 XL Base"),
+        ]),
     ]
 }
 
