@@ -1,0 +1,37 @@
+[
+  {
+    "id": "none",
+    "label": "No pinned style",
+    "genre": null,
+    "style_prompt": null,
+    "notes": "Let generate_song_prompt derive style from the message only. Use this for proper-noun trap checks."
+  },
+  {
+    "id": "indie-pop",
+    "label": "Indie pop",
+    "genre": "indie pop",
+    "style_prompt": null,
+    "notes": "Genre pill only — LLM writes the detailed style_prompt. Edit or replace style_prompt to pin exact wording."
+  },
+  {
+    "id": "tech-house",
+    "label": "Tech house (pinned prompt)",
+    "genre": "tech house",
+    "style_prompt": "Driving tech house, 126 BPM, four-on-the-floor kick, rolling bassline, dry hats, late-night warehouse energy. Male vocal, confident and rhythmic, not melodic ballad.",
+    "notes": "Pinned style_prompt skips LLM style writing when using --lyrics-mode fixed, or overrides after pipeline when using --force-style-prompt."
+  },
+  {
+    "id": "ghostly-trap",
+    "label": "Ghostly trap",
+    "genre": "trap",
+    "style_prompt": "Ghostly, hypnotic trap. Heavy 808s, sparse hi-hats, dark atmospheric pads. Low deadpan male vocal, minimal emotion.",
+    "notes": "Example pinned production brief — replace freely."
+  },
+  {
+    "id": "trap-clean-deadpan",
+    "label": "Trap clean deadpan",
+    "genre": "trap",
+    "style_prompt": "Trap vibes, clean sound, creative melody, fat punchy kicks. Rap with deadpan monotone flat vocal delivery.",
+    "notes": "Competition style brief for lyria/ace/eleven/minimax/suno bakeoff."
+  }
+]

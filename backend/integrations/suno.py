@@ -2,13 +2,12 @@
 
 Generates a short audio clip from lyrics / style / mood and returns the path to
 the downloaded file. The Suno API is asynchronous (submit -> poll -> download)
-and has no native "length" parameter, so a target length is honoured by
-trimming the finished clip locally with ffmpeg.
+and has no native length parameter.
 
 Designed to be imported (see `generate_clip`) and also run from the CLI:
 
     python -m backend.suno --description "upbeat synthwave about Tokyo at night"
-    python -m backend.suno --lyrics "[Verse]..." --style "dreampop" --length 20
+    python -m backend.suno --lyrics "[Verse]..." --style "dreampop"
 """
 
 from __future__ import annotations
@@ -17,12 +16,12 @@ import argparse
 import os
 import sys
 import time
-from dataclasses import dataclass, field
 from typing import Optional
 
 import requests
 
 from backend.integrations.ffmpeg import trim
+from backend.integrations.music_types import Clip
 from backend.secrets import SUNO_API_KEY
 
 BASE_URL = "https://api.suno.com"
@@ -40,17 +39,6 @@ _DONE = {"complete", "error"}
 
 class SunoError(RuntimeError):
     """Raised when the Suno API returns an error or a job fails."""
-
-
-@dataclass
-class Clip:
-    """Result of a completed generation."""
-
-    id: str
-    status: str
-    audio_url: str
-    title: Optional[str] = None
-    raw: dict = field(default_factory=dict)
 
 
 class SunoClient:
@@ -71,10 +59,11 @@ class SunoClient:
 
     # -- low-level ---------------------------------------------------------
 
-    def _post(self, path: str, payload: dict) -> dict:
-        resp = self.session.post(
-            f"{self.base_url}{path}", json=payload, timeout=self.timeout
-        )
+    def _post(self, path: str, payload: Optional[dict] = None) -> dict:
+        kwargs = {"timeout": self.timeout}
+        if payload is not None:
+            kwargs["json"] = payload
+        resp = self.session.post(f"{self.base_url}{path}", **kwargs)
         return self._unwrap(resp)
 
     def _get(self, path: str) -> dict:
@@ -174,10 +163,17 @@ class SunoClient:
             last_status = status
 
             if status == "complete":
+                # Newer Suno responses omit audio_url; audio is fetched from
+                # /v0/audio/{id}/stream with the same auth headers.
+                audio_url = (
+                    body.get("audio_url")
+                    or body.get("audioUrl")
+                    or self.stream_url(clip_id)
+                )
                 return Clip(
                     id=clip_id,
                     status=status,
-                    audio_url=body.get("audio_url", ""),
+                    audio_url=audio_url,
                     title=body.get("title"),
                     raw=body,
                 )
@@ -191,14 +187,33 @@ class SunoClient:
 
     # -- download / trim ---------------------------------------------------
 
-    def download(self, url: str, dest: str) -> str:
-        resp = self.session.get(url, timeout=self.timeout, stream=True)
+    def stream_url(self, clip_id: str) -> str:
+        """Return the authenticated stream endpoint for a generated clip."""
+        return f"{self.base_url}/v0/audio/{clip_id}/stream"
+
+    def mint_playback_url(self, clip_id: str) -> str:
+        """Mint a short-lived, clip-scoped URL that is safe for browser playback."""
+        body = self._post(f"/v0/audio/{clip_id}/playback-token")
+        url = body.get("url")
+        if not url:
+            raise SunoError(f"No playback URL in response: {body}")
+        return url
+
+    def download(self, clip_id: str, dest: str) -> str:
+        resp = self.session.get(
+            self.stream_url(clip_id), timeout=self.timeout, stream=True
+        )
         if resp.status_code >= 400:
             raise SunoError(f"Failed to download audio: HTTP {resp.status_code}")
         with open(dest, "wb") as fh:
             for chunk in resp.iter_content(chunk_size=8192):
                 fh.write(chunk)
         return dest
+
+
+def mint_playback_url(clip_id: str) -> str:
+    """Mint a browser-safe playback URL for a completed Suno clip."""
+    return SunoClient().mint_playback_url(clip_id)
 
 
 def generate_clip(
@@ -217,8 +232,7 @@ def generate_clip(
     """Generate one audio clip end to end and download it.
 
     Returns the completed :class:`Clip`; the local file path is available on the
-    returned object's ``path`` attribute (set below). If ``length`` is given, the
-    downloaded clip is trimmed to that many seconds with ffmpeg.
+    returned object's ``path`` attribute (set below).
     """
     client = SunoClient()
     clip_id = client.submit(
@@ -235,11 +249,12 @@ def generate_clip(
         timeout=poll_timeout,
         on_status=on_status,
     )
-    if not clip.audio_url:
-        raise SunoError("Clip completed but no audio_url was returned.")
 
     os.makedirs(out_dir, exist_ok=True)
-    clip.path = client.download(clip.audio_url, f"{os.path.join(out_dir, 'suno')}.mp3")
+    dest = f"{os.path.join(out_dir, 'suno')}.mp3"
+    clip.path = client.download(clip.id, dest)
+    if not os.path.getsize(dest):
+        raise SunoError(f"Downloaded empty audio for clip {clip.id}")
 
     return clip
 
@@ -267,11 +282,6 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--instrumental", action="store_true", help="Generate without vocals."
-    )
-    p.add_argument(
-        "--length",
-        type=float,
-        help="Trim the result to this many seconds (uses ffmpeg).",
     )
     p.add_argument(
         "--out-dir", default=".", help="Directory for the downloaded file."

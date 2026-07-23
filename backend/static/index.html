@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>SoundsGood — local test client</title>
+<style>
+  :root { color-scheme: dark; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+    background: #111;
+    color: #eee;
+    max-width: 560px;
+    margin: 48px auto;
+    padding: 0 16px;
+  }
+  h1 { font-size: 18px; font-weight: 600; color: #999; margin-bottom: 24px; }
+  textarea {
+    width: 100%;
+    box-sizing: border-box;
+    min-height: 72px;
+    background: #1c1c1c;
+    border: 1px solid #333;
+    border-radius: 10px;
+    color: #eee;
+    padding: 12px;
+    font-size: 15px;
+    resize: vertical;
+  }
+  .genres { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 20px; }
+  .genre {
+    padding: 6px 14px;
+    border-radius: 999px;
+    border: 1px solid #333;
+    background: #1c1c1c;
+    color: #ccc;
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .genre.selected { background: #4a7cff; border-color: #4a7cff; color: #fff; }
+  .field-label { display: block; font-size: 12px; color: #777; margin-bottom: 6px; }
+  select#lyricsModel, select#musicModel {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 10px 12px;
+    margin-bottom: 20px;
+    background: #1c1c1c;
+    border: 1px solid #333;
+    border-radius: 10px;
+    color: #eee;
+    font-size: 14px;
+  }
+  select#musicModel optgroup {
+    font-style: normal;
+    font-weight: 500;
+    color: #888;
+  }
+  select#musicModel option {
+    font-weight: 400;
+    color: #eee;
+  }
+  button#go {
+    width: 100%;
+    padding: 12px;
+    border: none;
+    border-radius: 10px;
+    background: #4a7cff;
+    color: #fff;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+  }
+  button#go:disabled { background: #333; color: #777; cursor: default; }
+  #status { margin-top: 16px; font-size: 13px; color: #999; white-space: pre-wrap; }
+  #result { margin-top: 20px; display: none; }
+  #result audio { width: 100%; margin-top: 8px; }
+  .audio-output + .audio-output { margin-top: 16px; }
+  .audio-label { display: block; font-size: 12px; color: #999; }
+  .playback-link { display: inline-block; margin-top: 8px; color: #8baeff; font-size: 13px; }
+  #result .lyrics { font-size: 13px; color: #aaa; white-space: pre-wrap; margin-top: 8px; }
+  .error { color: #ff6b6b; }
+</style>
+</head>
+<body>
+  <h1>SoundsGood — local test client</h1>
+
+  <textarea id="message" placeholder="museum tonight? they got the new dali exhibition there"></textarea>
+
+  <div class="genres" id="genres"></div>
+
+  <label for="lyricsModel" class="field-label">Lyrics model</label>
+  <select id="lyricsModel"></select>
+
+  <label for="musicModel" class="field-label">Music model</label>
+  <select id="musicModel"></select>
+
+  <button id="go">Generate</button>
+
+  <div id="status"></div>
+
+  <div id="result">
+    <section class="audio-output">
+      <span class="audio-label">Final mix</span>
+      <audio id="player" controls autoplay></audio>
+    </section>
+    <section class="audio-output" id="source-audio" hidden>
+      <span class="audio-label" id="source-label">Original generation</span>
+      <audio id="source-player" controls></audio>
+      <a class="playback-link" id="source-playback-link" target="_blank" hidden></a>
+    </section>
+    <div class="lyrics" id="lyrics"></div>
+  </div>
+
+<script>
+  const GENRES = ["pop", "hip-hop", "edm", "metal", "country", "indie pop", "rock", "jazz", "r&b", "classical", "trap", "trap hip hop", "dark minimal techno", "tech house", "drum & bass"];
+  let selectedGenre = GENRES[0];
+
+  const LYRICS_MODELS = [
+    { id: "z-ai/glm-5.2", label: "GLM 5.2 (default)" },
+    { id: "moonshotai/kimi-k2.6", label: "Kimi K2.6" },
+    { id: "moonshotai/kimi-k2.7-code", label: "Kimi K2.7 Code" },
+    { id: "minimax/minimax-m3", label: "MiniMax M3" },
+    { id: "deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro" },
+    { id: "deepseek/deepseek-v4-flash", label: "DeepSeek V4 Flash" },
+    { id: "x-ai/grok-4.5", label: "Grok 4.5" },
+    { id: "google/gemma-4-31b-it", label: "Gemma 4 31B (legacy)" },
+  ];
+
+  const lyricsModelEl = document.getElementById("lyricsModel");
+  LYRICS_MODELS.forEach(m => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.label;
+    lyricsModelEl.appendChild(opt);
+  });
+
+  // Keys must match backend/integrations/music_provider.py's _PROVIDERS dict.
+  // Preselect a concrete model (no empty "server default" option).
+  const DEFAULT_MUSIC_MODEL = "suno";
+  const MUSIC_MODELS = [
+    { group: "fal.ai", options: [
+      { id: "ace-step", label: "ACE-Step" },
+      { id: "ace-step-prompt", label: "ACE-Step (prompt-to-audio)" },
+      { id: "minimax-v2", label: "MiniMax Music v2" },
+      { id: "minimax-v2.5", label: "MiniMax Music v2.5" },
+      { id: "minimax-v2.6", label: "MiniMax Music v2.6" },
+      { id: "lyria3", label: "Lyria 3" },
+      { id: "elevenlabs", label: "ElevenLabs Music" },
+    ]},
+    { group: "Suno", options: [
+      { id: "suno", label: "Suno" },
+    ]},
+    { group: "Replicate", options: [
+      { id: "replicate-ace-step-1.5", label: "ACE-Step 1.5" },
+      { id: "replicate-stable-audio-2.5", label: "Stable Audio 2.5" },
+    ]},
+    { group: "Runware", options: [
+      { id: "runware", label: "Runware Default" },
+      { id: "runware:ace-step@v1.5-xl-sft", label: "ACE-Step v1.5 XL SFT" },
+      { id: "runware:ace-step@v1.5-xl-turbo", label: "ACE-Step v1.5 XL Turbo" },
+      { id: "runware:ace-step@v1.5-xl-base", label: "ACE-Step v1.5 XL Base" },
+    ]},
+  ];
+
+  const musicModelEl = document.getElementById("musicModel");
+  const makeOption = m => {
+    const opt = document.createElement("option");
+    opt.value = m.id;
+    opt.textContent = m.label;
+    if (m.id === DEFAULT_MUSIC_MODEL) opt.selected = true;
+    return opt;
+  };
+  MUSIC_MODELS.forEach(entry => {
+    const group = document.createElement("optgroup");
+    group.label = entry.group;
+    entry.options.forEach(m => group.appendChild(makeOption(m)));
+    musicModelEl.appendChild(group);
+  });
+
+  const genresEl = document.getElementById("genres");
+  GENRES.forEach(g => {
+    const pill = document.createElement("button");
+    pill.className = "genre" + (g === selectedGenre ? " selected" : "");
+    pill.textContent = g;
+    pill.onclick = () => {
+      selectedGenre = g;
+      [...genresEl.children].forEach(c => c.classList.toggle("selected", c === pill));
+    };
+    genresEl.appendChild(pill);
+  });
+
+  const messageEl = document.getElementById("message");
+  const goEl = document.getElementById("go");
+  const statusEl = document.getElementById("status");
+  const resultEl = document.getElementById("result");
+  const playerEl = document.getElementById("player");
+  const sourceAudioEl = document.getElementById("source-audio");
+  const sourceLabelEl = document.getElementById("source-label");
+  const sourcePlayerEl = document.getElementById("source-player");
+  const sourcePlaybackLinkEl = document.getElementById("source-playback-link");
+  const lyricsEl = document.getElementById("lyrics");
+
+  goEl.onclick = async () => {
+    const input_message = messageEl.value.trim();
+    if (!input_message) {
+      statusEl.textContent = "Type a message first.";
+      statusEl.className = "error";
+      return;
+    }
+
+    goEl.disabled = true;
+    resultEl.style.display = "none";
+    sourceAudioEl.hidden = true;
+    sourcePlayerEl.removeAttribute("src");
+    sourcePlayerEl.load();
+    statusEl.className = "";
+    statusEl.textContent = "Generating (usually ~1 minute)...";
+
+    try {
+      const res = await fetch("/generate-song", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          input_message,
+          genre: selectedGenre,
+          lyrics_model: lyricsModelEl.value,
+          music_model: musicModelEl.value,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || `HTTP ${res.status}`);
+      }
+
+      statusEl.textContent = "";
+      playerEl.src = data.result_url;
+      if (data.source) {
+        sourcePlayerEl.src = data.source.local_url;
+        sourceLabelEl.textContent = `Original ${data.source.provider} generation`;
+        sourcePlaybackLinkEl.hidden = !data.source.playback_url;
+        sourcePlaybackLinkEl.href = data.source.playback_url || "";
+        sourcePlaybackLinkEl.textContent = `Open directly from ${data.source.provider}`;
+        sourceAudioEl.hidden = false;
+      }
+      lyricsEl.textContent = data.lyrics || "";
+      resultEl.style.display = "block";
+    } catch (err) {
+      statusEl.className = "error";
+      statusEl.textContent = "Error: " + err.message;
+    } finally {
+      goEl.disabled = false;
+    }
+  };
+</script>
+</body>
+</html>

@@ -16,7 +16,7 @@ class MessagesViewController: MSMessagesAppViewController {
     private var loadedSong: LoadedSong?
     private let loadingProgressController: LoadingProgressController = LoadingProgressControllerImpl()
     private let playColor = UIColor(red: 241/255, green: 87/255, blue: 35/255, alpha: 1)
-    private let genres = ["pop", "hip-hop", "edm", "metal", "country", "indie pop", "rock", "jazz", "r&b", "classical"]
+    private let genres = ["pop", "hip-hop", "edm", "metal", "country", "indie pop", "rock", "jazz", "r&b", "classical", "trap", "trap hip hop", "dark minimal techno", "tech house", "drum & bass"]
     private var selectedGenre = "pop"
 
     // MARK: - Input Bar

@@ -7,8 +7,12 @@ from openrouter import OpenRouter
 
 from backend.secrets import OPENROUTER_API_KEY
 
-DEFAULT_MODEL = "google/gemma-4-31b-it"
+DEFAULT_MODEL = "z-ai/glm-5.2"
 IMAGE_MODEL = "google/gemini-3.1-flash-image-preview"
+
+# Without an explicit timeout, a stalled OpenRouter response hangs the
+# request indefinitely instead of surfacing an error.
+REQUEST_TIMEOUT_MS = 90_000
 
 SONG_PROMPT_SYSTEM_PROMPT = """You are a creative songwriter and music prompt engineer. Given a user's input message and a desired mood, you produce TWO things:
 
@@ -81,7 +85,7 @@ def generate_song_prompt(
         *([f"Genre: {genre}"] if genre else []),
     ])
 
-    with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
+    with OpenRouter(api_key=OPENROUTER_API_KEY, timeout_ms=REQUEST_TIMEOUT_MS) as client:
         res = client.chat.send(
             model=model,
             messages=[
@@ -104,7 +108,7 @@ def generate_reply_context(*, original_lyrics: str, model: str | None = None) ->
 
     user_content = f"Original lyrics:\n{original_lyrics}"
 
-    with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
+    with OpenRouter(api_key=OPENROUTER_API_KEY, timeout_ms=REQUEST_TIMEOUT_MS) as client:
         res = client.chat.send(
             model=model,
             messages=[
@@ -132,7 +136,7 @@ def generate_album_art(
 
     user_content = f"Song theme: {input_message}"
 
-    with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
+    with OpenRouter(api_key=OPENROUTER_API_KEY, timeout_ms=REQUEST_TIMEOUT_MS) as client:
         res = client.chat.send(
             model=model,
             messages=[
@@ -151,7 +155,7 @@ def generate_album_art(
         img_bytes = base64.b64decode(b64)
     else:
         import requests
-        img_bytes = requests.get(url).content
+        img_bytes = requests.get(url, timeout=30).content
 
     os.makedirs(out_dir, exist_ok=True)
     path = os.path.join(out_dir, "cover.png")
@@ -163,7 +167,7 @@ def generate_album_art(
 def generate_song_title(*, input_message: str, model: str | None = None) -> str:
     model = model or DEFAULT_MODEL
 
-    with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
+    with OpenRouter(api_key=OPENROUTER_API_KEY, timeout_ms=REQUEST_TIMEOUT_MS) as client:
         res = client.chat.send(
             model=model,
             messages=[

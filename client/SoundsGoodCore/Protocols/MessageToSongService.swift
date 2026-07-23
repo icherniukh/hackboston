@@ -9,5 +9,5 @@ import Foundation
 import SoundsGoodCore
 
 public protocol MessageToSongService {
-    func generateSong(message: String, genre: String) async throws -> RemoteMessage
+    func generateSong(message: String, genre: String, lyricsModel: String?, musicModel: String?) async throws -> RemoteMessage
 }

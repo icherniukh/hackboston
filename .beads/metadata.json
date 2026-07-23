@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "falai",
+  "project_id": "1f742099-f9ea-420e-a127-866b5f6535f9"
+}

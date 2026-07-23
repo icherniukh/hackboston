@@ -5,9 +5,18 @@
 .deactivate.sh
 .idea/
 backend/output/
+backend/test_runs/
+backend/eval/runs/*
+!backend/eval/runs/.gitkeep
 backend/secrets.py
 backend/server.log
 input-songs/
 separated/
 venv/
 whisper/
+
+# Beads / Dolt files (added by bd init)
+.dolt/
+*.db
+.beads-credential-key
+.beads/proxieddb/
