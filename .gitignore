@@ -6,6 +6,8 @@
 .idea/
 backend/output/
 backend/test_runs/
+backend/eval/runs/*
+!backend/eval/runs/.gitkeep
 backend/secrets.py
 backend/server.log
 input-songs/

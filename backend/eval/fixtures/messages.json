@@ -1,0 +1,37 @@
+[
+  {
+    "id": "museum",
+    "input_message": "museum tonight? they got the new dali exhibition there",
+    "notes": "Clean baseline ask — short social text."
+  },
+  {
+    "id": "codex-tokens",
+    "input_message": "codex has gone crazy, no more 5h windows - mad stuff, no cap. blowing tokens like I'm walter white - john summit give me resets or I don't know",
+    "notes": "Proper-noun trap (John Summit) — style should NOT auto-become tech house unless genre/style is pinned."
+  },
+  {
+    "id": "chicken-ukr",
+    "input_message": "курка не м'ясо, кажу тобі в лице — смажена, печена, це просто не те",
+    "notes": "Non-English hook; lyric language fidelity matters."
+  },
+  {
+    "id": "3d-print-baby",
+    "input_message": "3d print me a baby",
+    "notes": "Short absurd ask — hook compression stress test."
+  },
+  {
+    "id": "maple-syrup",
+    "input_message": "there's never too much maple syrup on the pancake",
+    "notes": "Food maxim / playful declarative hook."
+  },
+  {
+    "id": "soft-miss",
+    "input_message": "hey… been thinking about last tuesday. miss hanging out. no pressure though",
+    "notes": "Soft emotional tone — style should stay intimate, not club-banger by default."
+  },
+  {
+    "id": "absurd-ketamine",
+    "input_message": "ketamine jazz at the loft, beer in the bathtub, nobody knows the password",
+    "notes": "Absurd / edgy — policy failures and weird vocal delivery are informative."
+  }
+]

@@ -1,0 +1,44 @@
+[
+  {
+    "id": "suno",
+    "label": "Suno",
+    "enabled": true,
+    "notes": "Dedicated lyrics/style; incumbent default."
+  },
+  {
+    "id": "minimax-v2.6",
+    "label": "MiniMax Music v2.6",
+    "enabled": true,
+    "notes": "Dedicated lyrics field."
+  },
+  {
+    "id": "replicate-ace-step-1.5",
+    "label": "Replicate ACE-Step 1.5",
+    "enabled": true,
+    "notes": "Dedicated lyrics field; real 1.5 release."
+  },
+  {
+    "id": "elevenlabs",
+    "label": "ElevenLabs Music",
+    "enabled": true,
+    "notes": "composition_plan path for lyrics."
+  },
+  {
+    "id": "lyria3",
+    "label": "Lyria 3",
+    "enabled": false,
+    "notes": "Single-prompt; enable for bleed/control comparisons."
+  },
+  {
+    "id": "ace-step",
+    "label": "fal.ai ACE-Step",
+    "enabled": false,
+    "notes": "fal-ai/ace-step v1 with dedicated tags+lyrics fields."
+  },
+  {
+    "id": "ace-step-prompt",
+    "label": "ACE-Step prompt-to-audio",
+    "enabled": false,
+    "notes": "Single-prompt bleed control."
+  }
+]
